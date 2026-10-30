@@ -6,7 +6,7 @@
 
 **Architecture:** A Vite + React + TypeScript SPA parses xlsx files in the browser, strips customer PII, and sends only aggregates to Supabase through code-checked `security definer` RPCs. Reads use the anon key under read-only RLS. All numbers come from pure functions in `src/metrics/`, so they can be tested without a browser or a database.
 
-**Tech Stack:** Vite 5.4, React 18.3.1, TypeScript 5.6, Vitest 2.1, SheetJS 0.20.3 (from cdn.sheetjs.com), @supabase/supabase-js 2.45, Supabase Postgres 17 with pgcrypto, Vercel CLI.
+**Tech Stack:** Vite 5.4, React 18.3.1, TypeScript 5.6, Vitest 2.1, SheetJS 0.20.3 (from cdn.sheetjs.com), @supabase/supabase-js 2.45, Supabase Postgres 17 with pgcrypto, GitHub Pages via GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-10-30-hylme-admin-dashboard-design.md`
 **Visual reference:** the approved prototype https://claude.ai/artifact/BAGQzEMXjHPJMRbhYpvSBN. Its source is at `C:\Users\HP05\AppData\Local\Temp\claude\C--Users-HP05-Downloads-admin-dashboard\3c980f8b-0b70-44b8-9a57-8e497143de6e\scratchpad\proto\project\Main.dc.html`. Match its layout, colors and copy.
@@ -65,7 +65,7 @@ scripts/verify-real.ts         local check against real exports in .. (not run i
 **Interfaces:**
 - Produces: `type PageId = '100379779472465' | 'igo_17841457670184062' | '923678677500634' | '516356078238016'`; `PAGES: { id: PageId; name: string; platform: 'Facebook' | 'Instagram' }[]` in the order FB, ไขมัน, นอน, IG; `isPageId(x: string): x is PageId`; `pageName(id: PageId | 'all'): string` ('all' → 'ทุกเพจ').
 
-- [ ] **Step 1:** Scaffold with `npm create vite@5 . -- --template react-ts`. Then install `npm i react@18.3.1 react-dom@18.3.1 @supabase/supabase-js@2.45.4 https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz` and `npm i -D vitest@2.1.9 tsx@4.19.2`. Add the scripts `"test": "vitest run"` and `"verify": "tsx scripts/verify-real.ts"`. `.env.example` lists `VITE_SUPABASE_URL=` and `VITE_SUPABASE_ANON_KEY=`.
+- [ ] **Step 1:** Scaffold with `npm create vite@5 . -- --template react-ts`, and set `base: '/hylme-admin/'` in `vite.config.ts` because the app is served under the GitHub Pages project path. Then install `npm i react@18.3.1 react-dom@18.3.1 @supabase/supabase-js@2.45.4 https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz` and `npm i -D vitest@2.1.9 tsx@4.19.2`. Add the scripts `"test": "vitest run"` and `"verify": "tsx scripts/verify-real.ts"`. `.env.example` lists `VITE_SUPABASE_URL=` and `VITE_SUPABASE_ANON_KEY=`.
 - [ ] **Step 2: Failing test** `tests/pages.test.ts`: `expect(PAGES.map(p => p.id)).toEqual(['100379779472465','516356078238016','923678677500634','igo_17841457670184062'])`; `expect(isPageId('igo_17841457670184062')).toBe(true)`; `expect(isPageId('123')).toBe(false)`; `expect(pageName('all')).toBe('ทุกเพจ')`.
 - [ ] **Step 3:** Run `npm test`. Expected: FAIL, module not found.
 - [ ] **Step 4:** Implement `src/config/pages.ts`. The names are as in Global Constraints. IG has platform Instagram, the others Facebook.
@@ -309,7 +309,7 @@ scripts/verify-real.ts         local check against real exports in .. (not run i
   - Page through results with `.range()` in steps of 1000 rows.
   - Turn RPC errors into a thrown `Error` with the Postgres message, which is already in Thai.
 - [ ] **Step 4:** Run `npm test -- data`. Expected: PASS.
-- [ ] **Step 5:** Fill in `.env.local` with the project URL and publishable key from MCP (`get_project_url`, `get_publishable_keys`). It is gitignored.
+- [ ] **Step 5:** Write the project URL and publishable key from MCP (`get_project_url`, `get_publishable_keys`) into `.env.production`, and add `!.env.production` to `.gitignore`. These values are public by design. Copy the same values into a gitignored `.env.local` for dev.
 - [ ] **Step 6:** Commit `feat: supabase data layer`.
 
 ### Task 9: App shell and Overview screen
@@ -389,11 +389,12 @@ scripts/verify-real.ts         local check against real exports in .. (not run i
   It prints `verify ok` when everything passes.
 - [ ] **Step 2:** Run `npm run verify`. Expected: `verify ok`.
 - [ ] **Step 3:** Ask the user for the real upload code, then set it with `update settings set value = crypt('<code>', gen_salt('bf')) where key='upload_code'`. Do not write the code in any file.
-- [ ] **Step 4:** Deploy to Vercel.
-  - The user runs `! npx vercel@39 login` once.
-  - Then run `npx vercel@39 link --yes --project hylme-admin`.
-  - Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for production with `npx vercel env add`.
-  - Run `npx vercel@39 deploy --prod`.
-  - Check in project settings that Deployment Protection is off for production, so staff can open the link.
+- [ ] **Step 4:** Deploy to GitHub Pages.
+  - Install the GitHub CLI with `winget install --id GitHub.cli -e`. The user then runs `! gh auth login` once.
+  - Add `.github/workflows/pages.yml`. It runs on push to `main` and does: `actions/checkout@v4`, `actions/setup-node@v4` (node 22, npm cache), `npm ci`, `npm test`, `npm run build`, `actions/upload-pages-artifact@v3` (path `dist`), then `actions/deploy-pages@v4`. Permissions are `pages: write` and `id-token: write`.
+  - Before pushing, run `git ls-files | grep -Ei '\.(xlsx|xls|csv)$'`. Expected: no output.
+  - Create and push with `gh repo create hylme-admin --public --source . --push`.
+  - Enable Pages from Actions with `gh api -X POST repos/{owner}/hylme-admin/pages -f build_type=workflow`.
+  - Wait for the run with `gh run watch`. Expected: success, and the site loads at `https://<owner>.github.io/hylme-admin/`.
 - [ ] **Step 5:** Upload both real files on the live site, and check that the Overview for 29 ต.ค. shows the numbers from Step 1.
 - [ ] **Step 6:** Commit `chore: real-data check, README, deploy`.

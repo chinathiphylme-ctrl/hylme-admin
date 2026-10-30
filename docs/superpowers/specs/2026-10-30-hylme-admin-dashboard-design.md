@@ -147,8 +147,9 @@ Supabase Postgres (โปรเจกต์ใหม่ hylme-admin, org "hylme 
 ## 11. การ deploy
 
 - เว็บเปิดสาธารณะ: พนักงานเปิดลิงก์ได้เลยไม่ต้องล็อกอิน (ผู้ใช้หลักคือพนักงาน ไม่ใช่เจ้าของ)
-- โค้ดเก็บเป็น git ในเครื่องนี้ ไม่ต้องขึ้น GitHub (ผู้ใช้ต้องการแค่ตัวเว็บ) ขึ้น GitHub ทีหลังได้ถ้าต้องการ
+- โฮสต์บน **GitHub Pages** (ผู้ใช้เลือก): repo สาธารณะ `hylme-admin` ใต้บัญชี GitHub ของผู้ใช้ (GitHub Pages ฟรีต้องเป็น repo สาธารณะ)
+- repo สาธารณะมีแค่โค้ดและเอกสาร ไม่มีไฟล์ export หรือข้อมูลลูกค้า (`.gitignore` กันไว้) รหัสอัปโหลดอยู่ในฐานข้อมูลเป็น hash เท่านั้น
+- GitHub Actions build ด้วย Vite แล้ว deploy ขึ้น Pages ทุกครั้งที่ push เข้า `main`
+- `VITE_SUPABASE_URL` และ publishable key เก็บใน `.env.production` ใน repo ได้ เพราะเป็นค่าที่เปิดเผยอยู่แล้วในหน้าเว็บ ความปลอดภัยมาจาก RLS และ RPC
+- Vite `base` = `/hylme-admin/` · ได้ลิงก์ `https://<ชื่อผู้ใช้ GitHub>.github.io/hylme-admin/`
 - Supabase: สร้างโปรเจกต์ใหม่ `hylme-admin` ใน org "hylme test" (แพ็กเกจฟรี) ภูมิภาคสิงคโปร์
-- Vercel: บัญชีส่วนตัว deploy จากเครื่องนี้ด้วย Vercel CLI, ตั้ง `VITE_SUPABASE_URL` และ `VITE_SUPABASE_ANON_KEY`
-- ได้ลิงก์แบบ `hylme-admin.vercel.app` (เปลี่ยนเป็นโดเมนตัวเองได้ภายหลัง)
-- ข้อควรรู้: แพ็กเกจฟรีของ Vercel (Hobby) เขียนไว้ว่าใช้ส่วนตัว ไม่ใช่เชิงพาณิชย์ ถ้าใช้ในบริษัทระยะยาวควรอัปเป็น Pro หรือย้ายไป Cloudflare Pages (ฟรี ใช้เชิงพาณิชย์ได้) — เว็บเป็นไฟล์ static ย้ายได้ไม่ต้องแก้โค้ด
