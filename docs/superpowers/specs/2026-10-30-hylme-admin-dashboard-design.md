@@ -146,7 +146,9 @@ Supabase Postgres (โปรเจกต์ใหม่ hylme-admin, org "hylme 
 
 ## 11. การ deploy
 
-- GitHub: repo private `hylme-admin`
+- เว็บเปิดสาธารณะ: พนักงานเปิดลิงก์ได้เลยไม่ต้องล็อกอิน (ผู้ใช้หลักคือพนักงาน ไม่ใช่เจ้าของ)
+- โค้ดเก็บเป็น git ในเครื่องนี้ ไม่ต้องขึ้น GitHub (ผู้ใช้ต้องการแค่ตัวเว็บ) ขึ้น GitHub ทีหลังได้ถ้าต้องการ
 - Supabase: สร้างโปรเจกต์ใหม่ `hylme-admin` ใน org "hylme test" (แพ็กเกจฟรี) ภูมิภาคสิงคโปร์
-- Vercel: บัญชีส่วนตัว เชื่อม repo, ตั้ง `VITE_SUPABASE_URL` และ `VITE_SUPABASE_ANON_KEY`
+- Vercel: บัญชีส่วนตัว deploy จากเครื่องนี้ด้วย Vercel CLI, ตั้ง `VITE_SUPABASE_URL` และ `VITE_SUPABASE_ANON_KEY`
 - ได้ลิงก์แบบ `hylme-admin.vercel.app` (เปลี่ยนเป็นโดเมนตัวเองได้ภายหลัง)
+- ข้อควรรู้: แพ็กเกจฟรีของ Vercel (Hobby) เขียนไว้ว่าใช้ส่วนตัว ไม่ใช่เชิงพาณิชย์ ถ้าใช้ในบริษัทระยะยาวควรอัปเป็น Pro หรือย้ายไป Cloudflare Pages (ฟรี ใช้เชิงพาณิชย์ได้) — เว็บเป็นไฟล์ static ย้ายได้ไม่ต้องแก้โค้ด
