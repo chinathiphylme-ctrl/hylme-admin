@@ -1,0 +1,10 @@
+# ไฟล์ export จาก Pancake มีข้อมูลลูกค้า ห้ามขึ้น git
+*.xlsx
+*.xls
+*.csv
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.vercel/
