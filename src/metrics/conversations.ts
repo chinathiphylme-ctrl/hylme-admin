@@ -55,7 +55,7 @@ export function convStats(convs: ConvRow[]) {
 }
 
 export type FollowItem = {
-  conversationId: string; pageId: PageId; stage: Stage; status: Reply
+  conversationId: string; pageId: PageId; day: string; stage: Stage; status: Reply
   product: string; last: string; msgs: number; kind: 'ลูกค้าเก่า' | 'ใหม่'; pancakeUrl: string
 }
 
@@ -66,6 +66,7 @@ export function followList(convs: ConvRow[]): FollowItem[] {
     .map(({ c, stage, status }): FollowItem => ({
       conversationId: c.conversationId,
       pageId: c.pageId,
+      day: c.day,
       stage,
       status,
       product: c.tags.find(isProduct) ?? '-',
