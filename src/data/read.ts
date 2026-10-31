@@ -1,0 +1,109 @@
+import { PAGES, type PageId } from '../config/pages'
+import type { Seen } from '../metrics/conversations'
+import { previousRange, type DateRange } from '../metrics/range'
+import type { ConvRow, TagRow } from '../parse/types'
+import { db } from './client'
+import { fromDbConv, fromDbTagRow, type DbConv, type DbTagRow } from './mappers'
+
+const PAGE = 1000
+
+type Page<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+
+async function all<T>(query: (from: number, to: number) => Page<T>): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await query(from, from + PAGE - 1)
+    if (error) throw new Error(error.message)
+    out.push(...(data ?? []))
+    if (!data || data.length < PAGE) return out
+  }
+}
+
+export async function fetchTagRows(r: DateRange): Promise<TagRow[]> {
+  const from = previousRange(r).from
+  const rows = await all<DbTagRow>((a, b) =>
+    db().from('tag_daily').select('day,page_id,tag,color,count').gte('day', from).lte('day', r.to)
+      .order('day').order('page_id').order('tag').range(a, b))
+  return rows.map(fromDbTagRow)
+}
+
+export async function fetchLatestDay(): Promise<string | null> {
+  const { data, error } = await db().from('tag_daily').select('day').order('day', { ascending: false }).limit(1)
+  if (error) throw new Error(error.message)
+  return data?.[0]?.day ?? null
+}
+
+export async function fetchDays(): Promise<string[]> {
+  const rows = await all<{ day_from: string | null; day_to: string | null; kind: string }>((a, b) =>
+    db().from('uploads').select('day_from,day_to,kind').eq('kind', 'tagStats').order('id').range(a, b))
+  return [...new Set(rows.flatMap(r => (r.day_from ? [r.day_from, r.day_to ?? r.day_from] : [])))].sort()
+}
+
+const CONV_COLS = 'day,conversation_id,page_id,first_at,last_at,msg_count,first_kind,has_phone,tags,pancake_url'
+
+export async function fetchConvs(r: DateRange): Promise<ConvRow[]> {
+  const rows = await all<DbConv>((a, b) =>
+    db().from('conversations').select(CONV_COLS).gte('day', r.from).lte('day', r.to)
+      .order('day').order('conversation_id').range(a, b))
+  return rows.map(fromDbConv)
+}
+
+// the newest message day of each page, for the follow-up list
+export async function fetchLatestConvs(): Promise<ConvRow[]> {
+  const perPage = await Promise.all(PAGES.map(async ({ id }: { id: PageId }) => {
+    const { data, error } = await db().from('conversations').select('day').eq('page_id', id)
+      .order('day', { ascending: false }).limit(1)
+    if (error) throw new Error(error.message)
+    const day = data?.[0]?.day
+    if (!day) return []
+    const rows = await all<DbConv>((a, b) =>
+      db().from('conversations').select(CONV_COLS).eq('page_id', id).eq('day', day).order('conversation_id').range(a, b))
+    return rows.map(fromDbConv)
+  }))
+  return perPage.flat()
+}
+
+// segment rates only need when ปิด first appeared
+export async function fetchSeen(): Promise<Seen[]> {
+  const rows = await all<{ conversation_id: string; tag: string; first_day: string | null; baseline: boolean }>((a, b) =>
+    db().from('conv_tag_seen').select('conversation_id,tag,first_day,baseline').eq('tag', 'ปิด')
+      .order('conversation_id').range(a, b))
+  return rows.map(r => ({ conversationId: r.conversation_id, tag: r.tag, firstDay: r.first_day, baseline: r.baseline }))
+}
+
+export async function fetchGroups(): Promise<{ overrides: Record<string, string>; adNames: Record<string, string> }> {
+  const rows = await all<{ tag: string; grp: string | null; ad_name: string | null }>((a, b) =>
+    db().from('tag_groups').select('tag,grp,ad_name').order('tag').range(a, b))
+  const overrides: Record<string, string> = {}
+  const adNames: Record<string, string> = {}
+  for (const r of rows) {
+    if (r.grp) overrides[r.tag] = r.grp
+    if (r.ad_name) adNames[r.tag] = r.ad_name
+  }
+  return { overrides, adNames }
+}
+
+export type Upload = { uploadedAt: string; kind: 'tagStats' | 'messages'; fileName: string; dayFrom: string | null; dayTo: string | null; pageIds: PageId[]; rows: number }
+
+export async function fetchUploads(): Promise<Upload[]> {
+  const { data, error } = await db().from('uploads').select('uploaded_at,kind,file_name,day_from,day_to,page_ids,rows')
+    .order('uploaded_at', { ascending: false }).limit(500)
+  if (error) throw new Error(error.message)
+  return (data ?? []).map(r => ({
+    uploadedAt: r.uploaded_at, kind: r.kind, fileName: r.file_name, dayFrom: r.day_from, dayTo: r.day_to,
+    pageIds: r.page_ids, rows: r.rows,
+  }))
+}
+
+// every tag the database knows, for the tag-group screen
+export async function fetchAllTags(): Promise<{ tag: string; color: string; total: number }[]> {
+  const rows = await all<{ tag: string; color: string; count: number }>((a, b) =>
+    db().from('tag_daily').select('tag,color,count').order('tag').range(a, b))
+  const m = new Map<string, { tag: string; color: string; total: number }>()
+  for (const r of rows) {
+    const x = m.get(r.tag) ?? { tag: r.tag, color: r.color, total: 0 }
+    x.total += r.count
+    m.set(r.tag, x)
+  }
+  return [...m.values()]
+}
