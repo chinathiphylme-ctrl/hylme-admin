@@ -56,6 +56,13 @@ describe('parseTagStats', () => {
     expect(r.rows.map(x => x.count)).toEqual([0, 0])
   })
 
+  it('merges tags that are the same after trimming', () => {
+    const sheets = tagStatsSheets({ pages: { [FB]: [['ปิด', '#b', [3]], [' ปิด', '#b', [2]]] }, dayHeaders: ['29/10'], range: ONE_DAY })
+    const r = parseTagStats(sheets, 'a.xlsx')
+    if (!r.ok) throw new Error(r.error)
+    expect(r.rows).toEqual([{ day: '2026-10-29', pageId: FB, tag: 'ปิด', color: '#b', count: 5 }])
+  })
+
   it('rejects the combined all-pages export', () => {
     const sheets = [...twoPages(), { name: 'ทุกหน้า', rows: twoPages()[0].rows }]
     expect(detectKind(sheets)).toBe('combined')

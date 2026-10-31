@@ -80,4 +80,20 @@ describe('segmentRates', () => {
     if (!s.ready) throw new Error(s.reason)
     expect(s.rows.find(x => x.dim === 'สินค้า' && x.name === 'มะกอก')).toEqual({ dim: 'สินค้า', name: 'มะกอก', chats: 2, closed: 1, rate: 50 })
   })
+
+  it('only counts chats whose date tag falls in the range, and closes first seen in the range', () => {
+    const r2 = { from: '2026-10-15', to: '2026-10-21' }
+    const old = conv(['1/10', 'มะกอก', 'ปิด'], { day: '2026-10-20', conversationId: 'old' })
+    const fresh1 = conv(['19/10', 'มะกอก'], { day: '2026-10-19', conversationId: 'fresh' })
+    const fresh2 = conv(['19/10', 'มะกอก', 'ปิด'], { day: '2026-10-20', conversationId: 'fresh' })
+    const early = conv(['16/10', 'มะกอก', 'ปิด'], { day: '2026-10-16', conversationId: 'early' })
+    const seen = [
+      { conversationId: 'old', tag: 'ปิด', firstDay: '2026-10-20', baseline: false },
+      { conversationId: 'fresh', tag: 'ปิด', firstDay: '2026-10-20', baseline: false },
+      { conversationId: 'early', tag: 'ปิด', firstDay: '2026-10-10', baseline: false },
+    ]
+    const s = segmentRates([old, fresh1, fresh2, early], seen, r2)
+    if (!s.ready) throw new Error(s.reason)
+    expect(s.rows.find(x => x.dim === 'สินค้า' && x.name === 'มะกอก')).toEqual({ dim: 'สินค้า', name: 'มะกอก', chats: 2, closed: 1, rate: 50 })
+  })
 })

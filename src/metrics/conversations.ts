@@ -83,6 +83,20 @@ export function followList(convs: ConvRow[]): FollowItem[] {
 
 export const SEGMENT_REASON = 'ต้องมีไฟล์ข้อความอย่างน้อย 2 วันติดกัน จึงจะรู้ว่าแชทไหนปิดในช่วงนี้จริง (แท็ก "ปิด" ในไฟล์เดียวอาจค้างมาจากการซื้อครั้งก่อน)'
 
+// earliest d/m date tag on any row, with the year taken from that row's day (a later month means last year)
+function startDay(rows: ConvRow[]): string | null {
+  let best: string | null = null
+  for (const r of rows) for (const t of r.tags) {
+    const m = t.match(/^(\d{1,2})\/(\d{1,2})$/)
+    if (!m) continue
+    const [y, mo] = [Number(r.day.slice(0, 4)), Number(r.day.slice(5, 7))]
+    const month = Number(m[2])
+    const d = `${month > mo ? y - 1 : y}-${String(month).padStart(2, '0')}-${m[1].padStart(2, '0')}`
+    if (!best || d < best) best = d
+  }
+  return best
+}
+
 type SegmentRow = { dim: 'สินค้า' | 'กลุ่มลูกค้า' | 'ข้อความแรก'; name: string; chats: number; closed: number; rate: number }
 
 export function segmentRates(convs: ConvRow[], seen: Seen[], range: DateRange):
@@ -92,7 +106,9 @@ export function segmentRates(convs: ConvRow[], seen: Seen[], range: DateRange):
 
   const byConv = new Map<string, ConvRow[]>()
   for (const c of convs) byConv.set(c.conversationId, [...(byConv.get(c.conversationId) ?? []), c])
-  const newClose = new Set(seen.filter(s => s.tag === 'ปิด' && !s.baseline && s.firstDay).map(s => s.conversationId))
+  const inRange = (d: string | null) => !!d && d >= range.from && d <= range.to
+  // a close counts only when the ปิด tag first appeared inside the range
+  const newClose = new Set(seen.filter(s => s.tag === 'ปิด' && !s.baseline && inRange(s.firstDay)).map(s => s.conversationId))
 
   const acc = new Map<string, SegmentRow>()
   const add = (dim: SegmentRow['dim'], name: string, closed: boolean) => {
@@ -105,12 +121,13 @@ export function segmentRates(convs: ConvRow[], seen: Seen[], range: DateRange):
   for (const [id, rows] of byConv) {
     rows.sort((a, b) => a.day.localeCompare(b.day))
     const first = rows[0]
-    if (first.day < range.from || first.day > range.to) continue
+    // the chat started on its earliest date tag; chats without one have an unknown start and are left out
+    if (!inRange(startDay(rows))) continue
     const closed = newClose.has(id)
     const tags = new Set(rows.flatMap(r => r.tags))
     for (const t of tags) if (isProduct(t)) add('สินค้า', t, closed)
     if (tags.has(OLD)) add('กลุ่มลูกค้า', 'ลูกค้าเก่า', closed)
-    else if (first.tags.includes(dateTag(first.day))) add('กลุ่มลูกค้า', 'ลูกค้าใหม่', closed)
+    else add('กลุ่มลูกค้า', 'ลูกค้าใหม่', closed)
     add('ข้อความแรก', first.firstKind === 'button' ? 'กดปุ่ม/ข้อความสั้นสำเร็จรูป' : 'พิมพ์คำถามเอง/ส่งรูป', closed)
   }
   return {

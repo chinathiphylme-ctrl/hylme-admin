@@ -97,13 +97,6 @@ export async function fetchUploads(): Promise<Upload[]> {
 
 // every tag the database knows, for the tag-group screen
 export async function fetchAllTags(): Promise<{ tag: string; color: string; total: number }[]> {
-  const rows = await all<{ tag: string; color: string; count: number }>((a, b) =>
-    db().from('tag_daily').select('tag,color,count').order('tag').range(a, b))
-  const m = new Map<string, { tag: string; color: string; total: number }>()
-  for (const r of rows) {
-    const x = m.get(r.tag) ?? { tag: r.tag, color: r.color, total: 0 }
-    x.total += r.count
-    m.set(r.tag, x)
-  }
-  return [...m.values()]
+  return all<{ tag: string; color: string; total: number }>((a, b) =>
+    db().from('tag_totals').select('tag,color,total').order('tag').range(a, b))
 }

@@ -46,7 +46,8 @@ export function parseTagStats(sheets: Sheet[], fileName: string): TagStatsResult
   const pageSheets = sheets.filter(s => !s.name.endsWith(' today') && isPageId(s.name.trim()))
   if (!pageSheets.length) return fail(ERR_NO_PAGE)
 
-  const rows: TagRow[] = []
+  // tags that only differ by surrounding spaces become one row, so a (day, page, tag) never repeats
+  const merged = new Map<string, TagRow>()
   const tags = new Map<string, string>()
   const days = new Set<string>()
   for (const s of pageSheets) {
@@ -62,14 +63,17 @@ export function parseTagStats(sheets: Sheet[], fileName: string): TagStatsResult
       if (!tags.has(tag)) tags.set(tag, color)
       for (const { col, day } of cols) {
         days.add(day)
-        rows.push({ day, pageId, tag, color, count: toCount(r[col]) })
+        const k = day + "|" + pageId + "|" + tag
+        const prev = merged.get(k)
+        if (prev) prev.count += toCount(r[col])
+        else merged.set(k, { day, pageId, tag, color, count: toCount(r[col]) })
       }
     }
   }
   return {
     ok: true,
     fileName,
-    rows,
+    rows: [...merged.values()],
     days: [...days].sort(),
     pageIds: pageSheets.map(s => s.name.trim() as PageId),
     tags: [...tags].map(([tag, color]) => ({ tag, color })),

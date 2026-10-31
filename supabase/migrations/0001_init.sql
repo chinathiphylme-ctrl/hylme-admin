@@ -33,6 +33,7 @@ create table conversations (
   primary key (day, conversation_id)
 );
 create index conversations_page_day on conversations (page_id, day);
+create index conversations_conv_day on conversations (conversation_id, day);
 
 create table conv_tag_seen (
   conversation_id text not null,
@@ -71,6 +72,11 @@ create policy "public read" on conversations for select to anon, authenticated u
 create policy "public read" on conv_tag_seen for select to anon, authenticated using (true);
 create policy "public read" on uploads for select to anon, authenticated using (true);
 
+-- per-tag totals for the tag screen, so the browser does not download every daily row
+create view tag_totals with (security_invoker = true) as
+  select tag, max(color) as color, sum(count)::int as total from tag_daily group by tag;
+grant select on tag_totals to anon, authenticated;
+
 revoke insert, update, delete, truncate on all tables in schema public from anon, authenticated;
 revoke all on settings from anon, authenticated;
 
@@ -80,6 +86,7 @@ declare v text;
 begin
   select value into v from settings where key = 'upload_code';
   if v is null or p_code is null or extensions.crypt(p_code, v) <> v then
+    perform pg_sleep(1); -- slows down guessing
     raise exception 'รหัสอัปโหลดไม่ถูกต้อง';
   end if;
 end $$;
@@ -104,9 +111,9 @@ begin
   where t.day = k.day and t.page_id = k.page_id;
 
   insert into tag_daily (day, page_id, tag, color, count)
-  select day, page_id, tag, coalesce(color, ''), coalesce(count, 0)
+  select day, page_id, tag, coalesce(max(color), ''), coalesce(sum(count), 0)
   from jsonb_to_recordset(p_rows) as x(day date, page_id text, tag text, color text, count int)
-  on conflict (day, page_id, tag) do update set count = tag_daily.count + excluded.count;
+  group by day, page_id, tag;
   get diagnostics n = row_count;
 
   insert into uploads (kind, file_name, day_from, day_to, page_ids, rows)

@@ -19,10 +19,10 @@
 เข้า Supabase → โปรเจกต์ `hylme-admin` → SQL Editor แล้วรัน (เปลี่ยน `รหัสใหม่`):
 
 ```sql
-update settings set value = extensions.crypt('รหัสใหม่', extensions.gen_salt('bf')) where key = 'upload_code';
+update settings set value = extensions.crypt('รหัสใหม่', extensions.gen_salt('bf', 10)) where key = 'upload_code';
 ```
 
-ฐานข้อมูลเก็บเฉพาะ hash ของรหัส ไม่มีใครอ่านรหัสจริงได้
+ใช้รหัสยาวอย่างน้อย 10 ตัว ผสมตัวอักษรและตัวเลข ฐานข้อมูลเก็บเฉพาะ hash ของรหัส ไม่มีใครอ่านรหัสจริงได้ และใส่รหัสผิดแต่ละครั้งต้องรอ 1 วินาที
 
 ## ถ้าเว็บขึ้นว่าโหลดข้อมูลไม่ได้
 
