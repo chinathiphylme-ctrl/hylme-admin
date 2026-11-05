@@ -1,6 +1,6 @@
-import type { ConvRow, TagRow } from '../parse/types'
+import type { ConvRow, OrderRow, TagRow } from '../parse/types'
 import { db } from './client'
-import { toDbConv, toDbTagRow } from './mappers'
+import { toDbConv, toDbOrder, toDbTagRow } from './mappers'
 
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
   const { data, error } = await db().rpc(fn, args)
@@ -19,3 +19,6 @@ export const saveMessages = (code: string, fileName: string, convs: ConvRow[]) =
 
 export const saveTagGroup = (code: string, tag: string, grp: string, adName: string) =>
   rpc<void>('set_tag_group', { p_code: code, p_tag: tag, p_grp: grp, p_ad_name: adName })
+
+export const saveOrders = (code: string, fileName: string, orders: OrderRow[]) =>
+  rpc<number>('save_orders', { p_code: code, p_file: fileName, p_orders: orders.map(toDbOrder) })

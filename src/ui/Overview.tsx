@@ -1,8 +1,9 @@
 import { PAGES, pageName, type PageId } from '../config/pages'
 import { convStats, segmentRates, type Seen } from '../metrics/conversations'
 import { pageCompare, stuckRanking, summarize, trend } from '../metrics/daily'
+import { orderStats } from '../metrics/orders'
 import { addDays, daysIn, previousRange, type DateRange } from '../metrics/range'
-import type { ConvRow, TagRow } from '../parse/types'
+import type { ConvRow, OrderRow, TagRow } from '../parse/types'
 import { Bar, BarList, HourBars, peakHours, Ring, StackedBar, TrendBars } from './charts'
 import { ACCENT, buildInsights, CRIT, deltaText, fixList, fmt, rangeLabel, rateColor, thaiDay } from './viewModel'
 
@@ -26,8 +27,8 @@ function pagesLabel(convs: ConvRow[]): string {
   return PAGES.filter(p => ids.has(p.id)).map(p => p.name).join(', ')
 }
 
-export function Overview({ rows, convs, seen, range, page, setPage, overrides, adNames, followCount, goFollow }: {
-  rows: TagRow[]; convs: ConvRow[]; seen: Seen[]; range: DateRange; page: PageId | 'all'; setPage: (p: PageId | 'all') => void
+export function Overview({ rows, convs, orders, seen, range, page, setPage, overrides, adNames, followCount, goFollow }: {
+  rows: TagRow[]; convs: ConvRow[]; orders: OrderRow[]; seen: Seen[]; range: DateRange; page: PageId | 'all'; setPage: (p: PageId | 'all') => void
   overrides: Record<string, string>; adNames: Record<string, string>; followCount: number; goFollow: () => void
 }) {
   const s = summarize(rows, overrides, range, page)
@@ -54,6 +55,8 @@ export function Overview({ rows, convs, seen, range, page, setPage, overrides, a
     pages: page === 'all' ? pages.map(x => ({ name: pageName(x.pageId), newChats: x.newChats, closed: x.closed, old: x.sources[0][1] })) : [],
   })
   const seg = segmentRates(pageConvs, seen, range)
+  const os = orderStats(orders, page)
+  const aMax = Math.max(1, ...os.admins.map(a => a.revenue))
 
   const summary = s.newChats
     ? `แชทใหม่ ${fmt(s.newChats)} แชท ปิดการขายได้ ${fmt(s.closed)} แชท` + (top ? ` ลูกค้าค้างมากที่สุดที่ “${top.group}” ${fmt(top.count)} แชท ควรตามให้ทันภายในวัน` : '')
@@ -119,6 +122,49 @@ export function Overview({ rows, convs, seen, range, page, setPage, overrides, a
             <span className="delta">{hasPrev ? deltaText(k.value, k.before, true) : `เทียบช่วงก่อน · ยังไม่มีข้อมูล ${rangeLabel(prev.from, prev.to)}`}</span>
           </div>
         ))}
+      </section>
+
+      <section className="card" style={{ gap: 14 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '6px 16px' }}>
+          <div className="stack" style={{ gap: 4 }}>
+            <h2>ยอดขายรายแอดมิน</h2>
+            <p className="desc">จากไฟล์ออเดอร์ของ Pancake นับตามคนที่ยืนยันออเดอร์ ไม่รวมออเดอร์ที่ยกเลิก{page === 'all' ? '' : ' เฉพาะออเดอร์จากเพจนี้'}</p>
+          </div>
+          {os.count > 0 && (
+            <span style={{ fontSize: 14, color: '#435349' }}>
+              รวม <b className="num" style={{ color: '#12241B' }}>{fmt(os.count)}</b> ออเดอร์ · <b className="num" style={{ color: '#12241B' }}>฿{fmt(os.revenue)}</b> · เฉลี่ย ฿{fmt(os.avg)}/ออเดอร์
+            </span>
+          )}
+        </div>
+        {os.count > 0 ? (
+          <div className="grid g-380">
+            <div className="stack" style={{ gap: 12 }}>
+              {os.admins.map(a => (
+                <div key={a.admin} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: '4px 12px', fontSize: 14 }}>
+                  <span style={{ fontWeight: 600 }}>{a.admin}</span>
+                  <span className="num" style={{ textAlign: 'right' }}><b>฿{fmt(a.revenue)}</b> <span className="small">({a.share}%)</span></span>
+                  <span style={{ gridColumn: '1 / -1' }}><Bar value={a.revenue} max={aMax} color={ACCENT} /></span>
+                  <span className="small" style={{ gridColumn: '1 / -1' }}>{fmt(a.orders)} ออเดอร์ · เฉลี่ย ฿{fmt(a.avg)}/ออเดอร์</span>
+                </div>
+              ))}
+            </div>
+            <div className="stack" style={{ gap: 10 }}>
+              <h3 style={{ fontSize: 14 }}>สินค้าที่ขายได้ (ชิ้น)</h3>
+              <BarList items={os.products} color="#3F6F8F" empty="—" />
+              {page === 'all' && os.sources.length > 1 && (
+                <>
+                  <h3 style={{ fontSize: 14, marginTop: 6 }}>ออเดอร์มาจาก</h3>
+                  <BarList items={os.sources} color="#7FA894" empty="—" />
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="dashed">
+            <b>ยังไม่มีไฟล์ออเดอร์ของ{label}</b>
+            <span>export ออเดอร์รายวันจาก Pancake (ไฟล์ orders_วันเดือน.xlsx) แล้วอัปโหลดที่เมนูอัปโหลดไฟล์ จะเห็นยอดขายและจำนวนออเดอร์ของแต่ละแอดมิน</span>
+          </div>
+        )}
       </section>
 
       {insights.length > 0 && (

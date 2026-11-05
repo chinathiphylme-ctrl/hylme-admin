@@ -1,9 +1,9 @@
 import { PAGES, type PageId } from '../config/pages'
 import type { Seen } from '../metrics/conversations'
 import { previousRange, type DateRange } from '../metrics/range'
-import type { ConvRow, TagRow } from '../parse/types'
+import type { ConvRow, OrderRow, TagRow } from '../parse/types'
 import { db } from './client'
-import { fromDbConv, fromDbTagRow, type DbConv, type DbTagRow } from './mappers'
+import { fromDbConv, fromDbOrder, fromDbTagRow, type DbConv, type DbOrder, type DbTagRow } from './mappers'
 
 const PAGE = 1000
 
@@ -48,6 +48,13 @@ export async function fetchConvs(r: DateRange): Promise<ConvRow[]> {
   return rows.map(fromDbConv)
 }
 
+export async function fetchOrders(r: DateRange): Promise<OrderRow[]> {
+  const rows = await all<DbOrder>((a, b) =>
+    db().from('pancake_orders').select('order_id,day,confirmed_at,admin,source,page_id,amount,discount,cod,status,items')
+      .gte('day', r.from).lte('day', r.to).order('day').order('order_id').range(a, b))
+  return rows.map(fromDbOrder)
+}
+
 // the newest message day of each page, for the follow-up list
 export async function fetchLatestConvs(): Promise<ConvRow[]> {
   const perPage = await Promise.all(PAGES.map(async ({ id }: { id: PageId }) => {
@@ -83,7 +90,7 @@ export async function fetchGroups(): Promise<{ overrides: Record<string, string>
   return { overrides, adNames }
 }
 
-export type Upload = { uploadedAt: string; kind: 'tagStats' | 'messages'; fileName: string; dayFrom: string | null; dayTo: string | null; pageIds: PageId[]; rows: number }
+export type Upload = { uploadedAt: string; kind: 'tagStats' | 'messages' | 'orders'; fileName: string; dayFrom: string | null; dayTo: string | null; pageIds: PageId[]; rows: number }
 
 export async function fetchUploads(): Promise<Upload[]> {
   const { data, error } = await db().from('uploads').select('uploaded_at,kind,file_name,day_from,day_to,page_ids,rows')

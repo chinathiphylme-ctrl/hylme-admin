@@ -1,19 +1,20 @@
 import { useMemo, useRef, useState } from 'react'
 import { pageName } from '../config/pages'
 import type { Upload as UploadRow } from '../data/read'
-import { checkCode, saveMessages, saveTagStats } from '../data/write'
+import { checkCode, saveMessages, saveOrders, saveTagStats } from '../data/write'
 import { addDays } from '../metrics/range'
 import { detectKind } from '../parse/detect'
 import { parseMessages } from '../parse/messages'
+import { parseOrders } from '../parse/orders'
 import { parseTagStats } from '../parse/tagStats'
-import type { MessagesResult, TagStatsResult } from '../parse/types'
+import type { MessagesResult, OrdersResult, TagStatsResult } from '../parse/types'
 import { loadCode, storeCode } from './code'
 import { uploadTime } from './Sidebar'
-import { existingKeys, planUpload } from './uploadPlan'
+import { existingKeys, KIND_LABEL, planUpload } from './uploadPlan'
 import { ACCENT, rangeLabel, thaiMonth } from './viewModel'
 
 const MAX_BYTES = 20 * 1024 * 1024
-type Parsed = TagStatsResult | MessagesResult
+type Parsed = TagStatsResult | MessagesResult | OrdersResult
 type SaveState = { fileName: string; ok: boolean; text: string }
 
 async function parseFile(file: File): Promise<Parsed> {
@@ -26,7 +27,8 @@ async function parseFile(file: File): Promise<Parsed> {
     const sheets = readWorkbook(await file.arrayBuffer())
     const kind = detectKind(sheets)
     if (kind === 'messages') return parseMessages(sheets, file.name)
-    if (kind === 'unknown') return fail('ไม่รู้จักไฟล์นี้ ต้องเป็นไฟล์สถิติแท็กแยกเพจ หรือไฟล์ข้อความจาก Pancake')
+    if (kind === 'orders') return parseOrders(sheets, file.name)
+    if (kind === 'unknown') return fail('ไม่รู้จักไฟล์นี้ ต้องเป็นไฟล์สถิติแท็กแยกเพจ ไฟล์ข้อความ หรือไฟล์ออเดอร์จาก Pancake')
     return parseTagStats(sheets, file.name)
   } catch {
     return fail('เปิดไฟล์ไม่ได้ ไฟล์อาจเสีย')
@@ -34,7 +36,6 @@ async function parseFile(file: File): Promise<Parsed> {
 }
 
 const WEEKDAYS = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา']
-const KIND_TEXT = { tagStats: 'สถิติแท็ก', messages: 'ไฟล์ข้อความ' }
 
 function Calendar({ uploads }: { uploads: UploadRow[] }) {
   const latest = uploads.map(u => u.dayTo).filter(Boolean).sort().at(-1) as string | undefined
@@ -67,10 +68,11 @@ function Calendar({ uploads }: { uploads: UploadRow[] }) {
           if (!d) return <span key={`e${i}`} />
           const t = count('tagStats', d)
           const msg = count('messages', d)
+          const ord = count('orders', d)
           const full = t === 4 && msg === 4
           const some = t + msg > 0
           return (
-            <span key={d} className="d" title={some ? `สถิติแท็ก ${t}/4 เพจ · ไฟล์ข้อความ ${msg}/4 เพจ` : 'ยังไม่มีไฟล์'}
+            <span key={d} className="d" title={some || ord ? `สถิติแท็ก ${t}/4 เพจ · ไฟล์ข้อความ ${msg}/4 เพจ · ออเดอร์ ${ord ? 'มีแล้ว' : 'ยังไม่มี'}` : 'ยังไม่มีไฟล์'}
               style={full ? { background: '#E3EDE7', fontWeight: 600 } : some ? { background: '#FBF3E3', fontWeight: 600, color: '#4F3505' } : undefined}>
               <span className="num">{Number(d.slice(8))}</span>
               <i style={{ background: full ? ACCENT : some ? '#D99A2B' : '#C9D3CD' }} />
@@ -124,7 +126,9 @@ export function Upload({ uploads, overrides, onSaved, goTags }: {
       const out: SaveState[] = []
       for (const p of ready) {
         try {
-          const n = 'rows' in p ? await saveTagStats(code, p.fileName, p.rows) : await saveMessages(code, p.fileName, p.convs)
+          const n = 'rows' in p ? await saveTagStats(code, p.fileName, p.rows)
+            : 'orders' in p ? await saveOrders(code, p.fileName, p.orders)
+            : await saveMessages(code, p.fileName, p.convs)
           out.push({ fileName: p.fileName, ok: true, text: `บันทึกแล้ว ${n.toLocaleString('en-US')} แถว` })
         } catch (e) {
           out.push({ fileName: p.fileName, ok: false, text: `บันทึกไม่สำเร็จ: ${(e as Error).message}` })
@@ -151,7 +155,7 @@ export function Upload({ uploads, overrides, onSaved, goTags }: {
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 15V4" /><path d="M7.5 8.5 12 4l4.5 4.5" /><path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15" /></svg>
           </span>
           <span style={{ fontWeight: 600, marginTop: 4 }}>ลากไฟล์ .xlsx มาวางที่นี่</span>
-          <span className="desc">ใส่ได้หลายไฟล์พร้อมกัน: สถิติแท็กแยกเพจ และไฟล์ข้อความของทุกเพจ (ไม่เกิน 20 MB ต่อไฟล์)</span>
+          <span className="desc">ใส่ได้หลายไฟล์พร้อมกัน: สถิติแท็กแยกเพจ ไฟล์ข้อความของทุกเพจ และไฟล์ออเดอร์ (ไม่เกิน 20 MB ต่อไฟล์)</span>
           <input ref={input} type="file" accept=".xlsx" multiple hidden onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
           <button type="button" className="btn-ghost" style={{ marginTop: 6, minHeight: 44, padding: '6px 18px' }} onClick={() => input.current?.click()} disabled={busy}>เลือกไฟล์</button>
         </div>
@@ -169,6 +173,7 @@ export function Upload({ uploads, overrides, onSaved, goTags }: {
                   <span style={{ fontSize: 13, color: f.error ? '#8A2E07' : '#435349' }}>{f.error ?? f.summary}</span>
                   {f.kind === 'tagStats' && <span className="small">ข้ามชีตรายชั่วโมง (today) ใช้เฉพาะยอดรวมของวัน</span>}
                   {f.kind === 'messages' && <span className="small">ตัดชื่อลูกค้า เบอร์โทร และเนื้อหาข้อความออกก่อนบันทึก</span>}
+                  {f.kind === 'orders' && <span className="small">ไม่บันทึกชื่อ เบอร์โทร และที่อยู่ลูกค้า เก็บเฉพาะเลขออเดอร์ แอดมิน เพจ สินค้า และยอดเงิน</span>}
                 </div>
               ))}
             </div>
@@ -204,7 +209,7 @@ export function Upload({ uploads, overrides, onSaved, goTags }: {
         <div className="stack" style={{ gap: 8, fontSize: 13, color: '#435349' }}>
           {uploads.length ? uploads.slice(0, 20).map((u, i) => (
             <span key={i}>
-              {uploadTime(u.uploadedAt)} · {KIND_TEXT[u.kind]} · {u.pageIds.length === 4 ? '4 เพจ' : u.pageIds.map(p => pageName(p)).join(', ')}
+              {uploadTime(u.uploadedAt)} · {KIND_LABEL[u.kind]}{u.kind === 'orders' ? '' : ` · ${u.pageIds.length === 4 ? '4 เพจ' : u.pageIds.map(p => pageName(p)).join(', ')}`}
               {u.dayFrom ? ` · ${rangeLabel(u.dayFrom, u.dayTo ?? u.dayFrom)}` : ''} · {u.rows.toLocaleString('en-US')} แถว
             </span>
           )) : <span>ยังไม่มีการอัปโหลด</span>}

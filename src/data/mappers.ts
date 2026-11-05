@@ -1,5 +1,5 @@
 import type { PageId } from '../config/pages'
-import type { ConvRow, FirstKind, TagRow } from '../parse/types'
+import type { ConvRow, FirstKind, OrderItem, OrderRow, TagRow } from '../parse/types'
 
 export type DbTagRow = { day: string; page_id: string; tag: string; color: string; count: number }
 export type DbConv = {
@@ -40,4 +40,20 @@ export const fromDbConv = (c: DbConv): ConvRow => ({
   hasPhone: c.has_phone,
   tags: c.tags,
   pancakeUrl: c.pancake_url,
+})
+
+export type DbOrder = {
+  order_id: string; day: string; confirmed_at: string; admin: string; source: string; page_id: string | null
+  amount: number; discount: number; cod: boolean; status: string; items: OrderItem[]
+}
+
+export const toDbOrder = (o: OrderRow): DbOrder => ({
+  order_id: o.orderId, day: o.day, confirmed_at: o.confirmedAt, admin: o.admin, source: o.source, page_id: o.pageId,
+  amount: o.amount, discount: o.discount, cod: o.cod, status: o.status, items: o.items,
+})
+
+export const fromDbOrder = (o: DbOrder): OrderRow => ({
+  orderId: o.order_id, day: o.day, confirmedAt: toBangkokIsoFromAny(o.confirmed_at), admin: o.admin, source: o.source,
+  pageId: o.page_id as PageId | null, amount: Number(o.amount), discount: Number(o.discount), cod: o.cod, status: o.status,
+  items: o.items ?? [],
 })

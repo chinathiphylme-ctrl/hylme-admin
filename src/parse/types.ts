@@ -23,6 +23,26 @@ export type ConvRow = {
   pancakeUrl: string
 }
 
+export type OrderItem = { sku: string; name: string; qty: number }
+
+export type OrderRow = {
+  orderId: string
+  day: string
+  confirmedAt: string
+  admin: string
+  source: string
+  pageId: PageId | null
+  amount: number
+  discount: number
+  cod: boolean
+  status: string
+  items: OrderItem[]
+}
+
+export type OrdersResult =
+  | { ok: true; fileName: string; orders: OrderRow[]; days: string[]; pageIds: PageId[] }
+  | { ok: false; fileName: string; error: string }
+
 export type MessagesResult =
   | { ok: true; fileName: string; convs: ConvRow[]; days: string[]; pageIds: PageId[]; messageCount: number }
   | { ok: false; fileName: string; error: string }
