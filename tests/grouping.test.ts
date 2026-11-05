@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ALL_GROUPS, STAGE_GROUPS, dateTag, groupOf } from '../src/grouping/rules'
+import { ALL_GROUPS, STAGE_GROUPS, dateTag, groupOf, isDateTagOf } from '../src/grouping/rules'
 
 describe('groupOf', () => {
   it.each([
@@ -31,5 +31,12 @@ describe('groupOf', () => {
 describe('dateTag', () => {
   it('drops zero padding', () => {
     expect(dateTag('2026-10-08')).toBe('8/10')
+  })
+
+  it('matches a day tag with or without a leading zero', () => {
+    expect(isDateTagOf('01/11', '2026-11-01')).toBe(true)
+    expect(isDateTagOf(' 1/11', '2026-11-01')).toBe(true)
+    expect(isDateTagOf('1/11', '2026-11-02')).toBe(false)
+    expect(isDateTagOf('8.ลูกค้าเก่า', '2026-11-08')).toBe(false)
   })
 })

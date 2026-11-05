@@ -39,3 +39,9 @@ export function dateTag(day: string): string {
   const [, m, d] = day.split('-')
   return `${Number(d)}/${Number(m)}`
 }
+
+// admins write the same day as "1/11" or "01/11"
+export function isDateTagOf(tag: string, day: string): boolean {
+  const t = tag.trim().match(/^(\d{1,2})\/(\d{1,2})$/)
+  return !!t && `${Number(t[1])}/${Number(t[2])}` === dateTag(day)
+}

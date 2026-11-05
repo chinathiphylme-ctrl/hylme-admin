@@ -1,5 +1,5 @@
 import { PAGES, type PageId } from '../config/pages'
-import { STAGE_GROUPS, dateTag, groupOf } from '../grouping/rules'
+import { STAGE_GROUPS, groupOf, isDateTagOf } from '../grouping/rules'
 import type { TagRow } from '../parse/types'
 import { daysIn, type DateRange } from './range'
 
@@ -32,7 +32,7 @@ export function rate(closed: number, newChats: number): number | null {
 export function summarize(rows: TagRow[], overrides: Record<string, string>, range: DateRange, page: PageId | 'all'): Summary {
   const sel = rows.filter(inRange(range)).filter(onPage(page))
   // a day's new chats are its own date tag only; older date tags on that day are follow-ups
-  const newChats = sel.filter(x => x.tag === dateTag(x.day)).reduce((s, x) => s + x.count, 0)
+  const newChats = sel.filter(x => isDateTagOf(x.tag, x.day)).reduce((s, x) => s + x.count, 0)
   const byTag = new Map<string, number>()
   for (const x of sel) byTag.set(x.tag, (byTag.get(x.tag) ?? 0) + x.count)
   const tag = (t: string) => byTag.get(t) ?? 0

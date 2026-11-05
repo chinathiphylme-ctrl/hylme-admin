@@ -1,5 +1,5 @@
 import type { PageId } from '../config/pages'
-import { dateTag, groupOf } from '../grouping/rules'
+import { groupOf, isDateTagOf } from '../grouping/rules'
 import type { ConvRow } from '../parse/types'
 import { addDays, type DateRange } from './range'
 
@@ -23,7 +23,7 @@ export function replyOf(tags: string[]): Reply {
 }
 
 const isProduct = (t: string) => groupOf(t, {}) === 'สินค้า'
-const isNew = (c: ConvRow) => c.tags.includes(dateTag(c.day)) && !c.tags.includes(OLD)
+const isNew = (c: ConvRow) => c.tags.some(t => isDateTagOf(t, c.day)) && !c.tags.includes(OLD)
 const count = <T,>(xs: T[], f: (x: T) => boolean) => xs.filter(f).length
 
 export function convStats(convs: ConvRow[]) {
