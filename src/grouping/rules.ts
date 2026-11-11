@@ -28,12 +28,14 @@ const BY_NAME: Record<string, Group> = {
   'ความดัน': 'เรื่องสุขภาพ', 'อาการชา': 'เรื่องสุขภาพ', 'เบาหวาน': 'เรื่องสุขภาพ', 'ไขมัน': 'เรื่องสุขภาพ',
 }
 
+export const isAdTag = (t: string) => /^\d{12,}$/.test(t.trim())
+
 // rule order from spec §7: override, date, ad id, numbered prefix, name, unassigned
 export function groupOf(tag: string, overrides: Record<string, string>): Group | 'วันที่' {
   const t = tag.trim()
   if (overrides[t]) return overrides[t]
   if (/^\d{1,2}\/\d{1,2}$/.test(t)) return 'วันที่'
-  if (/^\d{12,}$/.test(t)) return 'โฆษณา'
+  if (isAdTag(t)) return 'โฆษณา'
   const m = t.match(/^(\d+)\.?\s*\D/)
   if (m && BY_NUMBER[m[1]]) return BY_NUMBER[m[1]]
   return BY_NAME[t] ?? 'ยังไม่จัดกลุ่ม'
