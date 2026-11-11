@@ -1,5 +1,5 @@
 import type { PageId } from '../config/pages'
-import { groupOf, isDateTagOf } from '../grouping/rules'
+import { groupOf, isCloseTag, isDateTagOf } from '../grouping/rules'
 import type { ConvRow } from '../parse/types'
 import { addDays, type DateRange } from './range'
 
@@ -13,7 +13,7 @@ const FOLLOW_ORDER: Stage[] = ['พร้อมสั่ง', 'ลังเล',
 const OLD = '8.ลูกค้าเก่า'
 
 export function stageOf(tags: string[]): Stage {
-  if (tags.includes('ปิด')) return 'ปิดแล้ว'
+  if (tags.some(isCloseTag)) return 'ปิดแล้ว'
   return STAGE_PREFIX.find(([p]) => tags.some(t => t.startsWith(p)))?.[1] ?? 'อื่นๆ'
 }
 
@@ -32,7 +32,7 @@ export function convStats(convs: ConvRow[]) {
   const hours = Array<number>(24).fill(0)
   // only first and last times are kept, so hours count chats by the hour of the latest message
   for (const c of convs) hours[Number(c.lastAt.slice(11, 13))]++
-  const closed = convs.filter(c => c.tags.includes('ปิด'))
+  const closed = convs.filter(c => c.tags.some(isCloseTag))
   return {
     total: convs.length,
     matrix: STAGES.filter(s => s !== 'ปิดแล้ว').flatMap(stage => {
@@ -81,7 +81,7 @@ export function followList(convs: ConvRow[]): FollowItem[] {
       || a.last.localeCompare(b.last))
 }
 
-export const SEGMENT_REASON = 'ต้องมีไฟล์ข้อความอย่างน้อย 2 วันติดกัน จึงจะรู้ว่าแชทไหนปิดในช่วงนี้จริง (แท็ก "ปิด" ในไฟล์เดียวอาจค้างมาจากการซื้อครั้งก่อน)'
+export const SEGMENT_REASON = 'ต้องมีไฟล์ข้อความอย่างน้อย 2 วันติดกัน จึงจะรู้ว่าแชทไหนปิดในช่วงนี้จริง (แท็กปิดในไฟล์เดียวอาจค้างมาจากการซื้อครั้งก่อน)'
 
 // earliest d/m date tag on any row, with the year taken from that row's day (a later month means last year)
 function startDay(rows: ConvRow[]): string | null {
@@ -107,8 +107,16 @@ export function segmentRates(convs: ConvRow[], seen: Seen[], range: DateRange):
   const byConv = new Map<string, ConvRow[]>()
   for (const c of convs) byConv.set(c.conversationId, [...(byConv.get(c.conversationId) ?? []), c])
   const inRange = (d: string | null) => !!d && d >= range.from && d <= range.to
-  // a close counts only when the ปิด tag first appeared inside the range
-  const newClose = new Set(seen.filter(s => s.tag === 'ปิด' && !s.baseline && inRange(s.firstDay)).map(s => s.conversationId))
+  // a close counts only when the chat's first close tag (ปิด, ปิดAds or ปิดOrganic) appeared inside the range;
+  // a baseline close means it was already closed before we saw it, even if the tag was later swapped
+  const firstClose = new Map<string, string | null>()
+  for (const s of seen.filter(x => isCloseTag(x.tag))) {
+    const prev = firstClose.get(s.conversationId)
+    const day = s.baseline ? null : s.firstDay
+    if (prev === undefined) firstClose.set(s.conversationId, day)
+    else firstClose.set(s.conversationId, prev === null || day === null ? null : (day < prev ? day : prev))
+  }
+  const newClose = new Set([...firstClose].filter(([, d]) => inRange(d)).map(([id]) => id))
 
   const acc = new Map<string, SegmentRow>()
   const add = (dim: SegmentRow['dim'], name: string, closed: boolean) => {

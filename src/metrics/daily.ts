@@ -1,11 +1,14 @@
 import { PAGES, type PageId } from '../config/pages'
-import { STAGE_GROUPS, groupOf, isDateTagOf } from '../grouping/rules'
+import { CLOSE_TAGS, STAGE_GROUPS, groupOf, isCloseTag, isDateTagOf } from '../grouping/rules'
 import type { TagRow } from '../parse/types'
 import { daysIn, type DateRange } from './range'
 
 export type Summary = {
   newChats: number
   closed: number
+  closedSplit: { ads: number; organic: number; unspecified: number }
+  // close tags taken off (Pancake counts are added minus removed), already netted out of `closed`
+  closedRemoved: number
   rate: number | null
   ready: number
   pending: number
@@ -45,15 +48,22 @@ export function summarize(rows: TagRow[], overrides: Record<string, string>, ran
   const groupTotal = (g: string) => (byGroup.get(g) ?? []).reduce((s, [, n]) => s + n, 0)
   const listed = (g: string) => (byGroup.get(g) ?? []).filter(([, n]) => n > 0).sort(byCount)
 
-  const closed = tag('ปิด')
+  const closed = Math.max(0, tag(CLOSE_TAGS.ads) + tag(CLOSE_TAGS.organic) + tag(CLOSE_TAGS.unspecified))
+  const closedRemoved = sel.filter(x => isCloseTag(x.tag) && x.count < 0).reduce((s, x) => s - x.count, 0)
   return {
     newChats,
     closed,
+    closedSplit: {
+      ads: Math.max(0, tag(CLOSE_TAGS.ads)),
+      organic: Math.max(0, tag(CLOSE_TAGS.organic)),
+      unspecified: Math.max(0, tag(CLOSE_TAGS.unspecified)),
+    },
+    closedRemoved,
     rate: rate(closed, newChats),
     ready: tag('5.พร้อมสั่ง'),
     pending: tag('ไม่เปิดอ่าน') + tag('อ่านไม่ตอบ'),
     journey: STAGE_GROUPS.map(group => {
-      const count = groupTotal(group)
+      const count = Math.max(0, groupTotal(group))
       return {
         group,
         count,

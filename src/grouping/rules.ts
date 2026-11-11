@@ -12,8 +12,12 @@ const BY_NUMBER: Record<string, Group> = {
   8: 'ที่มาลูกค้า', 9: 'ที่มาลูกค้า', 10: 'ที่มาลูกค้า',
 }
 
+// since 8/11/2026 admins tag where a close came from; plain ปิด is the older, unsplit tag
+export const CLOSE_TAGS = { ads: 'ปิดAds', organic: 'ปิดOrganic', unspecified: 'ปิด' } as const
+export const isCloseTag = (t: string) => Object.values(CLOSE_TAGS).includes(t.trim() as never)
+
 const BY_NAME: Record<string, Group> = {
-  'ปิด': 'ปิดการขาย',
+  'ปิด': 'ปิดการขาย', 'ปิดAds': 'ปิดการขาย', 'ปิดOrganic': 'ปิดการขาย',
   'รอ': 'ออเดอร์ค้าง/มีปัญหา', 'ตรวจสอบ': 'ออเดอร์ค้าง/มีปัญหา', 'ยกเลิก': 'ออเดอร์ค้าง/มีปัญหา', 'โอนเงินคืน': 'ออเดอร์ค้าง/มีปัญหา',
   'ไม่เปิดอ่าน': 'เงียบหาย', 'อ่านไม่ตอบ': 'เงียบหาย',
   'ทักซ้ำไม่ซื้อ': 'ไม่ซื้อ', 'ไม่สนใจ': 'ไม่ซื้อ',

@@ -80,3 +80,36 @@ describe('pageCompare and stuckRanking', () => {
     expect(r.find(x => x.group === 'ปิดการขาย')).toBeUndefined()
   })
 })
+
+describe('closes split into ปิด, ปิดAds and ปิดOrganic', () => {
+  const FIT = '923678677500634'
+  const NOV = [
+    ...tagRows('2026-11-08', { [FB]: { '8/11': 38, 'ปิด': 2, 'ปิดAds': 10, 'ปิดOrganic': 1 }, [FAT]: { '8/11': 49, 'ปิด': 5, 'ปิดAds': 9 } }),
+    ...tagRows('2026-11-09', { [FB]: { '9/11': 26, 'ปิด': -1, 'ปิดAds': 6, 'ปิดOrganic': 1 }, [FAT]: { '9/11': 33, 'ปิดAds': 5 }, [FIT]: { '9/11': 2 } }),
+  ]
+  const D8 = { from: '2026-11-08', to: '2026-11-08' }
+  const D9 = { from: '2026-11-09', to: '2026-11-09' }
+
+  it('counts all three close tags (real 8/11 export)', () => {
+    const s = summarize(NOV, {}, D8, 'all')
+    expect([s.newChats, s.closed]).toEqual([87, 27])
+    expect(s.closedSplit).toEqual({ ads: 19, organic: 1, unspecified: 7 })
+    expect(s.closedRemoved).toBe(0)
+    expect(s.journey.find(j => j.group === 'ปิดการขาย')?.count).toBe(27)
+  })
+
+  it('nets a removed ปิด tag and reports it (real 9/11 export)', () => {
+    const s = summarize(NOV, {}, D9, 'all')
+    expect([s.newChats, s.closed]).toEqual([61, 11])
+    expect(s.closedSplit).toEqual({ ads: 11, organic: 1, unspecified: 0 })
+    expect(s.closedRemoved).toBe(1)
+  })
+
+  it('never shows a negative close count', () => {
+    const neg = tagRows('2026-11-09', { [FB]: { '9/11': 5, 'ปิด': -2 } })
+    const s = summarize(neg, {}, D9, FB)
+    expect([s.closed, s.rate, s.closedRemoved]).toEqual([0, 0, 2])
+    expect(s.closedSplit.unspecified).toBe(0)
+    expect(trend(neg, D9, FB)[0].closed).toBe(0)
+  })
+})

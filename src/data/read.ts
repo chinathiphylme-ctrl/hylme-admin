@@ -1,4 +1,5 @@
 import { PAGES, type PageId } from '../config/pages'
+import { CLOSE_TAGS } from '../grouping/rules'
 import type { Seen } from '../metrics/conversations'
 import { previousRange, type DateRange } from '../metrics/range'
 import type { ConvRow, OrderRow, TagRow } from '../parse/types'
@@ -70,10 +71,10 @@ export async function fetchLatestConvs(): Promise<ConvRow[]> {
   return perPage.flat()
 }
 
-// segment rates only need when ปิด first appeared
+// segment rates only need when a close tag first appeared
 export async function fetchSeen(): Promise<Seen[]> {
   const rows = await all<{ conversation_id: string; tag: string; first_day: string | null; baseline: boolean }>((a, b) =>
-    db().from('conv_tag_seen').select('conversation_id,tag,first_day,baseline').eq('tag', 'ปิด')
+    db().from('conv_tag_seen').select('conversation_id,tag,first_day,baseline').in('tag', Object.values(CLOSE_TAGS))
       .order('conversation_id').range(a, b))
   return rows.map(r => ({ conversationId: r.conversation_id, tag: r.tag, firstDay: r.first_day, baseline: r.baseline }))
 }

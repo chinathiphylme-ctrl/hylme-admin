@@ -62,9 +62,13 @@ export function Overview({ rows, convs, orders, seen, range, page, setPage, over
     ? `แชทใหม่ ${fmt(s.newChats)} แชท ปิดการขายได้ ${fmt(s.closed)} แชท` + (top ? ` ลูกค้าค้างมากที่สุดที่ “${top.group}” ${fmt(top.count)} แชท ควรตามให้ทันภายในวัน` : '')
     : `${name} ไม่มีแชทที่ติดแท็กเลยใน${label} ควรเช็กว่าเพจนี้มีลูกค้าทักเข้ามาไหม หรือแอดมินยังไม่ได้ติดแท็ก`
 
+  const cl = s.closedSplit
+  const closedNote = `Ads ${fmt(cl.ads)} · Organic ${fmt(cl.organic)}` + (cl.unspecified ? ` · ไม่ระบุ ${fmt(cl.unspecified)}` : '')
+    + (s.closedRemoved ? ` · หักแท็กปิดที่ถูกถอด/เปลี่ยน ${fmt(s.closedRemoved)}` : '')
+
   const kpis = [
     { label: 'แชทใหม่', value: s.newChats, before: p.newChats, note: 'แท็กวันที่ของแต่ละวัน', dot: '#7FA894' },
-    { label: 'ปิดการขาย', value: s.closed, before: p.closed, note: 'แท็ก “ปิด”', dot: ACCENT },
+    { label: 'ปิดการขาย', value: s.closed, before: p.closed, note: closedNote, dot: ACCENT },
     { label: 'พร้อมสั่ง', value: s.ready, before: p.ready, note: 'แท็ก 5.พร้อมสั่ง', dot: '#D99A2B' },
     { label: 'รอตามต่อ', value: s.pending, before: p.pending, note: 'ไม่เปิดอ่าน + อ่านไม่ตอบ', dot: CRIT },
   ]
@@ -108,7 +112,8 @@ export function Overview({ rows, convs, orders, seen, range, page, setPage, over
           </Ring>
           <div className="note">
             <span><b>{fmt(s.closed)}</b> ปิด จาก <b>{fmt(s.newChats)}</b> แชทใหม่</span>
-            <small>นับแท็ก “ปิด” ÷ แชทใหม่ รวมลูกค้าเก่าที่กลับมาซื้อด้วย</small>
+            <small>{closedNote}</small>
+            <small>นับแท็ก “ปิดAds” + “ปิดOrganic” + “ปิด” (แบบเก่า ไม่ระบุที่มา) ÷ แชทใหม่ รวมลูกค้าเก่าที่กลับมาซื้อด้วย</small>
           </div>
         </div>
       </section>

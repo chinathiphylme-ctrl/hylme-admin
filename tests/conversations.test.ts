@@ -19,6 +19,10 @@ const conv = (tags: string[], over: Partial<ConvRow> = {}): ConvRow => ({
 
 describe('stageOf and replyOf', () => {
   it('lets ปิด win', () => expect(stageOf(['ปิด', '5.พร้อมสั่ง'])).toBe('ปิดแล้ว'))
+  it('treats ปิดAds and ปิดOrganic as closed', () => {
+    expect(stageOf(['ปิดAds', '5.พร้อมสั่ง'])).toBe('ปิดแล้ว')
+    expect(stageOf(['ปิดOrganic'])).toBe('ปิดแล้ว')
+  })
   it('takes the furthest numbered stage', () => expect(stageOf(['2.ขอราคา', '1.สนใจ'])).toBe('ขอราคา'))
   it('falls back to อื่นๆ', () => expect(stageOf(['มะกอก'])).toBe('อื่นๆ'))
   it('prefers ไม่เปิดอ่าน', () => expect(replyOf(['ไม่เปิดอ่าน', 'อ่านไม่ตอบ'])).toBe('ไม่เปิดอ่าน'))
@@ -93,6 +97,21 @@ describe('segmentRates', () => {
       { conversationId: 'early', tag: 'ปิด', firstDay: '2026-10-10', baseline: false },
     ]
     const s = segmentRates([old, fresh1, fresh2, early], seen, r2)
+    if (!s.ready) throw new Error(s.reason)
+    expect(s.rows.find(x => x.dim === 'สินค้า' && x.name === 'มะกอก')).toEqual({ dim: 'สินค้า', name: 'มะกอก', chats: 2, closed: 1, rate: 50 })
+  })
+
+  it('counts a ปิดAds close, but not a baseline ปิด that was swapped to ปิดAds', () => {
+    const a1 = conv(['28/10', 'มะกอก'], { day: '2026-10-28', conversationId: 'a' })
+    const a2 = conv(['28/10', 'มะกอก', 'ปิดAds'], { day: '2026-10-29', conversationId: 'a' })
+    const b1 = conv(['28/10', 'มะกอก', 'ปิด'], { day: '2026-10-28', conversationId: 'b' })
+    const b2 = conv(['28/10', 'มะกอก', 'ปิดAds'], { day: '2026-10-29', conversationId: 'b' })
+    const seen = [
+      { conversationId: 'a', tag: 'ปิดAds', firstDay: '2026-10-29', baseline: false },
+      { conversationId: 'b', tag: 'ปิด', firstDay: null, baseline: true },
+      { conversationId: 'b', tag: 'ปิดAds', firstDay: '2026-10-29', baseline: false },
+    ]
+    const s = segmentRates([a1, a2, b1, b2], seen, r)
     if (!s.ready) throw new Error(s.reason)
     expect(s.rows.find(x => x.dim === 'สินค้า' && x.name === 'มะกอก')).toEqual({ dim: 'สินค้า', name: 'มะกอก', chats: 2, closed: 1, rate: 50 })
   })
