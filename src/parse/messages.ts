@@ -88,10 +88,14 @@ export function parseMessages(sheets: Sheet[], fileName: string): MessagesResult
   if (!sawHeader) return fail(ERR_NO_MESSAGE_HEADER)
   if (!msgs.length) return fail(ERR_NO_PAGE)
 
-  const byConv = new Map<string, Msg[]>()
-  for (const m of msgs) byConv.set(m.conv, [...(byConv.get(m.conv) ?? []), m])
+  // one row per chat per day, so a file covering several days gives the same rows as one export per day
+  const byConvDay = new Map<string, Msg[]>()
+  for (const m of msgs) {
+    const k = `${m.conv}|${m.at.slice(0, 10)}`
+    byConvDay.set(k, [...(byConvDay.get(k) ?? []), m])
+  }
 
-  const convs: ConvRow[] = [...byConv.values()].map(list => {
+  const convs: ConvRow[] = [...byConvDay.values()].map(list => {
     list.sort((a, b) => a.at.localeCompare(b.at))
     const first = list[0]
     const last = list[list.length - 1]

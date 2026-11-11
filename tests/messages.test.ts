@@ -107,14 +107,14 @@ describe('parseMessages', () => {
     }
   })
 
-  it('uses the day of the last message', () => {
+  it('splits a chat that crosses midnight into one row per day', () => {
     const r = parse([
       msg('c1', '28/10/2026 23:50:00', 'สนใจ'),
       msg('c1', '29/10/2026 00:10:00', 'ราคา'),
       msg('c2', '29/10/2026 09:00:00', 'สนใจ'),
     ])
-    expect(r.convs.find(c => c.conversationId === 'c1')!.day).toBe('2026-10-29')
-    expect(r.days).toEqual(['2026-10-29'])
+    expect(r.convs.filter(c => c.conversationId === 'c1').map(c => c.day).sort()).toEqual(['2026-10-28', '2026-10-29'])
+    expect(r.days).toEqual(['2026-10-28', '2026-10-29'])
     expect(r.pageIds).toEqual([FB])
   })
 
@@ -127,5 +127,25 @@ describe('parseMessages', () => {
   it('rejects other pages', () => {
     const r = parseMessages(messageSheets([msg('c1', '29/10/2026 10:00:00', 'สนใจ', { 'รหัสหน้า (page_id)': '999' })]), 'm.xlsx')
     expect(r).toEqual({ ok: false, fileName: 'm.xlsx', error: 'ไม่พบเพจของ Hylme ในไฟล์นี้' })
+  })
+})
+
+describe('files that span several days', () => {
+  it('keeps one row per chat per day, like daily exports', () => {
+    const r = parse([
+      msg('c1', '29/10/2026 10:00:00', 'สนใจ'),
+      msg('c1', '29/10/2026 11:00:00', 'แพงจัง'),
+      msg('c1', '2/11/2026 09:00:00', 'ส่งปลายทางได้ไหม', { 'มีโทรศัพท์': true }),
+      msg('c2', '2/11/2026 12:00:00', 'สวัสดีค่ะ'),
+    ])
+    const c1 = r.convs.filter(c => c.conversationId === 'c1').sort((a, b) => a.day.localeCompare(b.day))
+    expect(c1.map(c => [c.day, c.msgCount, c.firstKind, c.hasPhone, c.topics])).toEqual([
+      ['2026-10-29', 2, 'button', false, ['ราคา/แพง']],
+      ['2026-11-02', 1, 'typed', true, ['ส่งของ/จ่ายเงิน']],
+    ])
+    expect(c1[0].firstAt).toBe('2026-10-29T10:00:00+07:00')
+    expect(c1[0].lastAt).toBe('2026-10-29T11:00:00+07:00')
+    expect(r.convs).toHaveLength(3)
+    expect(r.days).toEqual(['2026-10-29', '2026-11-02'])
   })
 })
