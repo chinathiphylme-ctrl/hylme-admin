@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { pageName } from '../config/pages'
 import type { FollowItem, Stage } from '../metrics/conversations'
+import { GradePill } from './LeadGrades'
 import { CRIT, thaiDay } from './viewModel'
 
 const FILTERS: [Stage | 'all', string, string][] = [
@@ -42,7 +43,7 @@ export function Follow({ items }: { items: FollowItem[] }) {
           <table style={{ minWidth: 820 }}>
             <thead>
               <tr>
-                <th style={{ width: 36 }}>#</th><th>เพจ</th><th>ขั้น</th><th>สถานะ</th><th>สินค้า</th><th>ลูกค้า</th><th>ทักล่าสุด</th>
+                <th style={{ width: 36 }}>#</th><th>เพจ</th><th>เกรด · ขั้น</th><th>สถานะ</th><th>สินค้า</th><th>ลูกค้า</th><th>ทักล่าสุด</th>
                 <th style={{ textAlign: 'right' }}>ข้อความ</th><th><span className="sr">เปิดแชท</span></th>
               </tr>
             </thead>
@@ -51,7 +52,7 @@ export function Follow({ items }: { items: FollowItem[] }) {
                 <tr key={f.conversationId}>
                   <td className="num" style={{ color: '#6A7A71', fontSize: 13 }}>{i + 1}</td>
                   <td style={{ fontSize: 13, color: '#435349' }}>{pageName(f.pageId)}</td>
-                  <td><span className="stage-pill" style={STAGE_STYLE[f.stage]}>{f.stage}</span></td>
+                  <td style={{ whiteSpace: 'nowrap' }}><GradePill grade={f.grade} /> <span className="stage-pill" style={STAGE_STYLE[f.stage]}>{f.stage}</span></td>
                   <td style={{ whiteSpace: 'nowrap' }}><span className="sdot" style={{ background: f.status === 'ไม่เปิดอ่าน' ? '#B4401A' : '#E3A33B' }} />{f.status}</td>
                   <td>{f.product}</td>
                   <td style={{ color: '#435349' }}>{f.kind === 'ใหม่' ? 'ลูกค้าใหม่' : 'ลูกค้าเก่า'}</td>

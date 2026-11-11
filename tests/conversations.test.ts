@@ -116,3 +116,17 @@ describe('segmentRates', () => {
     expect(s.rows.find(x => x.dim === 'สินค้า' && x.name === 'มะกอก')).toEqual({ dim: 'สินค้า', name: 'มะกอก', chats: 2, closed: 1, rate: 50 })
   })
 })
+
+describe('followList grades', () => {
+  it('puts a higher grade first, ahead of stage order', () => {
+    const ready = conv(['5.พร้อมสั่ง', 'ไม่เปิดอ่าน'], { conversationId: 'ready' })
+    const price = conv(['2.ขอราคา', 'อ่านไม่ตอบ'], { conversationId: 'price' })
+    const out = followList([ready, price], new Map([['price', 'A'], ['ready', 'C']]))
+    expect(out.map(f => [f.conversationId, f.grade])).toEqual([['price', 'A'], ['ready', 'C']])
+  })
+  it('grades from the row itself when the chat has no lead', () => {
+    const ready = conv(['5.พร้อมสั่ง', 'ไม่เปิดอ่าน'], { conversationId: 'solo', msgCount: 1 })
+    expect(followList([ready])[0].grade).toBe('A')
+  })
+})
+

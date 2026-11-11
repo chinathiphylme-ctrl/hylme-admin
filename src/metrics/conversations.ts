@@ -1,6 +1,7 @@
 import type { PageId } from '../config/pages'
 import { groupOf, isCloseTag, isDateTagOf } from '../grouping/rules'
 import type { ConvRow } from '../parse/types'
+import { gradeOf, type Grade } from './leads'
 import { addDays, type DateRange } from './range'
 
 export type Stage = 'สนใจ' | 'ถามสุขภาพ' | 'ขอราคา' | 'ขอโปร' | 'ลังเล' | 'พร้อมสั่ง' | 'ปิดแล้ว' | 'อื่นๆ'
@@ -56,10 +57,13 @@ export function convStats(convs: ConvRow[]) {
 
 export type FollowItem = {
   conversationId: string; pageId: PageId; day: string; stage: Stage; status: Reply
-  product: string; last: string; msgs: number; kind: 'ลูกค้าเก่า' | 'ใหม่'; pancakeUrl: string
+  product: string; last: string; msgs: number; kind: 'ลูกค้าเก่า' | 'ใหม่'; pancakeUrl: string; grade: Grade
 }
 
-export function followList(convs: ConvRow[]): FollowItem[] {
+const GRADE_ORDER: Grade[] = ['A', 'B', 'C', 'D']
+
+// grades come from all of a chat's exports when known; otherwise from this one row
+export function followList(convs: ConvRow[], grades: Map<string, Grade> = new Map()): FollowItem[] {
   return convs
     .map(c => ({ c, stage: stageOf(c.tags), status: replyOf(c.tags) }))
     .filter(x => FOLLOW_ORDER.includes(x.stage) && (x.status === 'ไม่เปิดอ่าน' || x.status === 'อ่านไม่ตอบ'))
@@ -74,9 +78,12 @@ export function followList(convs: ConvRow[]): FollowItem[] {
       msgs: c.msgCount,
       kind: c.tags.includes(OLD) ? 'ลูกค้าเก่า' : 'ใหม่',
       pancakeUrl: c.pancakeUrl,
+      grade: grades.get(c.conversationId)
+        ?? gradeOf({ tags: c.tags, msgs: c.msgCount, days: 1, typedFirst: c.firstKind !== 'button' }),
     }))
     .sort((a, b) =>
-      FOLLOW_ORDER.indexOf(a.stage) - FOLLOW_ORDER.indexOf(b.stage)
+      GRADE_ORDER.indexOf(a.grade) - GRADE_ORDER.indexOf(b.grade)
+      || FOLLOW_ORDER.indexOf(a.stage) - FOLLOW_ORDER.indexOf(b.stage)
       || Number(a.status !== 'อ่านไม่ตอบ') - Number(b.status !== 'อ่านไม่ตอบ')
       || a.last.localeCompare(b.last))
 }

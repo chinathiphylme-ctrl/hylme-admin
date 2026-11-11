@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { PageId } from '../config/pages'
 import {
-  fetchAllTags, fetchConvs, fetchConvsFrom, fetchDays, fetchGroups, fetchLatestConvs, fetchOrders, fetchSeen, fetchTagRows, fetchUploads, type Upload,
+  fetchAllTags, fetchConvs, fetchConvsByIds, fetchConvsFrom, fetchDays, fetchGroups, fetchLatestConvs, fetchOrders, fetchSeen, fetchTagRows, fetchUploads, type Upload,
 } from '../data/read'
 import { groupOf } from '../grouping/rules'
 import { followList, type Seen } from '../metrics/conversations'
-import { toLeads, type Lead } from '../metrics/leads'
+import { gradeOf, toLeads, type Grade, type Lead } from '../metrics/leads'
 import { addDays, rangeFor, type DateRange, type RangeKey } from '../metrics/range'
 import type { ConvRow, OrderRow, TagRow } from '../parse/types'
 import { FilterBar } from './FilterBar'
@@ -38,6 +38,7 @@ export function App() {
   const [convs, setConvs] = useState<ConvRow[]>([])
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
+  const [grades, setGrades] = useState<Map<string, Grade>>(new Map())
   const [error, setError] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
 
@@ -68,7 +69,17 @@ export function App() {
     return () => { live = false }
   }, [range?.from, range?.to, version]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const follow = useMemo(() => followList(base?.latestConvs ?? []), [base])
+  // follow-list grades use every export of those chats, not just the latest file
+  useEffect(() => {
+    if (!base?.latestConvs.length) return
+    let live = true
+    fetchConvsByIds([...new Set(base.latestConvs.map(c => c.conversationId))])
+      .then(rs => { if (live) setGrades(new Map(toLeads(rs).map(l => [l.conversationId, gradeOf(l)]))) })
+      .catch(() => { /* grades fall back to the latest row */ })
+    return () => { live = false }
+  }, [base])
+
+  const follow = useMemo(() => followList(base?.latestConvs ?? [], grades), [base, grades])
   const unassigned = useMemo(
     () => (base?.allTags ?? []).filter(t => groupOf(t.tag, base!.overrides) === 'ยังไม่จัดกลุ่ม').length, [base])
 
