@@ -15,6 +15,10 @@ function numbers(x: unknown): number[] {
 }
 
 describe('summarize', () => {
+  it('clamps negative net source tags at zero', () => {
+    const negative = { day: D29.from, pageId: FB as '100379779472465', tag: '9.อื่นๆ .(ทักมั่ว)', color: '', count: -9 }
+    expect(summarize([negative], {}, D29, 'all').sources).toContainEqual(['อื่นๆ (ทักมั่ว)', 0])
+  })
   it('matches the verified 29 ต.ค. totals for all pages', () => {
     const s = summarize(rows, {}, D29, 'all')
     expect([s.newChats, s.closed, s.rate, s.ready, s.pending]).toEqual([188, 27, 14.4, 28, 174])

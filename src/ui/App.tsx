@@ -33,6 +33,9 @@ export function App() {
   const [tab, setTab] = useState<Tab>('overview')
   const [page, setPage] = useState<PageId | 'all'>('all')
   const [rangeKey, setRangeKey] = useState<RangeKey>('day')
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [autoRange, setAutoRange] = useState<RangeKey | null>(null)
+  const [loadedKey, setLoadedKey] = useState('')
   const [custom, setCustom] = useState<DateRange | null>(null)
   const [base, setBase] = useState<Base | null>(null)
   const [rows, setRows] = useState<TagRow[] | null>(null)
@@ -56,7 +59,8 @@ export function App() {
   }, [version])
 
   const latest = base?.days.at(-1) ?? null
-  const range = useMemo(() => (latest ? rangeFor(rangeKey, latest, custom ?? undefined) : null), [latest, rangeKey, custom])
+  const range = useMemo(() => (latest ? rangeFor(rangeKey, latest, custom ?? undefined, selectedDay ?? undefined) : null), [latest, rangeKey, custom, selectedDay])
+  const dataKey = range ? `${range.from}|${range.to}|${version}` : ''
 
   useEffect(() => {
     if (!range) return
@@ -65,7 +69,7 @@ export function App() {
     // widen to 14 days so the trend chart has context even for a one-day view
     const widened = { from: range.from < addDays(range.to, -13) ? range.from : addDays(range.to, -13), to: range.to }
     Promise.all([fetchTagRows(widened), fetchConvs(range), fetchOrders(range)])
-      .then(([r, c, o]) => { if (live) { setRows(r); setConvs(c); setOrders(o) } })
+      .then(([r, c, o]) => { if (live) { setRows(r); setConvs(c); setOrders(o); setLoadedKey(dataKey) } })
       .catch(e => live && setError(String(e.message ?? e)))
     return () => { live = false }
   }, [range?.from, range?.to, version]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -80,13 +84,21 @@ export function App() {
 
   // one day has too few chats to judge an ad, so the ads tab opens on 30 days
   const goTab = (t: Tab) => {
-    if (t === 'ads' && rangeKey === 'day') setRangeKey('30d')
+    if (t === 'ads' && tab !== 'ads' && rangeKey === 'day' && !selectedDay) { setAutoRange('day'); setRangeKey('30d') }
+    if (tab === 'ads' && t !== 'ads' && autoRange) { setRangeKey(autoRange); setAutoRange(null) }
     setTab(t)
   }
 
   const pickRange = (k: RangeKey) => {
+    setAutoRange(null)
     setRangeKey(k)
     if (k === 'custom' && !custom && latest) setCustom({ from: addDays(latest, -6), to: latest })
+  }
+
+  const pickDay = (day: string) => {
+    setSelectedDay(day)
+    setAutoRange(null)
+    setRangeKey('day')
   }
 
   let body: React.ReactNode
@@ -101,19 +113,19 @@ export function App() {
   } else if (!base) {
     body = <div className="grid g-200">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton" />)}</div>
   } else if (tab === 'upload') {
-    body = <UploadScreen uploads={base.uploads} overrides={base.overrides} onSaved={reload} goTags={() => setTab('tags')} />
+    body = <UploadScreen uploads={base.uploads} overrides={base.overrides} onSaved={reload} goTags={() => goTab('tags')} />
   } else if (tab === 'tags') {
     body = <Tags tags={base.allTags} overrides={base.overrides} adNames={base.adNames} onSaved={reload} />
   } else if (tab === 'ads' && latest && range) {
     // leads load with base, so the ads tab is ready as soon as base is
-    body = <Ads leads={base.leads} range={range} page={page} adNames={base.adNames} goTags={() => setTab('tags')} />
+    body = <Ads leads={base.leads} range={range} page={page} adNames={base.adNames} goTags={() => goTab('tags')} />
   } else if (tab === 'quotes') {
-    body = <Quotes />
+    body = <Quotes leads={base.leads} days={base.days} />
   } else if (tab === 'follow') {
     body = <Follow items={follow} />
   } else if (!latest || !range) {
     body = <section className="card"><h2>ยังไม่มีข้อมูล อัปโหลดไฟล์แรกได้ที่เมนูอัปโหลด</h2></section>
-  } else if (!rows) {
+  } else if (!rows || loadedKey !== dataKey) {
     body = <div className="grid g-200">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton" />)}</div>
   } else {
     body = <Overview rows={rows} convs={convs} orders={orders} leads={base.leads} seen={base.seen} range={range} page={page} setPage={setPage}
@@ -133,6 +145,7 @@ export function App() {
           </div>
           {(tab === 'overview' || tab === 'ads') && latest && range && (
             <FilterBar rangeKey={rangeKey} setRangeKey={pickRange} custom={custom ?? range} setCustom={setCustom}
+              days={base?.days ?? []} selectedDay={selectedDay ?? latest} setDay={pickDay}
               latest={latest} multiDay={(base?.days.length ?? 0) > 1} page={page} setPage={setPage} />
           )}
         </header>

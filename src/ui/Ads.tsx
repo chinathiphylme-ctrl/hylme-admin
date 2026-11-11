@@ -31,13 +31,14 @@ function AdRows({ ads, avg }: { ads: AdScore[]; avg: number }) {
       <table style={{ minWidth: 820 }}>
         <thead>
           <tr>
-            <th>โฆษณา</th><th style={{ textAlign: 'right' }}>แชทใหม่</th><th style={{ textAlign: 'right' }}>ลีด A+B</th>
+            <th>#</th><th>โฆษณา</th><th style={{ textAlign: 'right' }}>แชทใหม่</th><th style={{ textAlign: 'right' }}>ลีด A+B</th>
             <th style={{ textAlign: 'right' }}>ปิด</th><th style={{ textAlign: 'right' }}>อัตราปิด</th><th>คำตัดสิน</th><th>เพจ</th><th>เห็นช่วง</th>
           </tr>
         </thead>
         <tbody>
           {ads.map(a => (
             <tr key={a.tag}>
+              <td className="num">{a.rank ?? '—'}</td>
               <td style={{ overflowWrap: 'anywhere' }}>
                 {a.name ? <><b>{a.name}</b> <span className="small">· {a.tag}</span></> : `แอด ${a.tag}`}
                 {a.shortId && <> <span className="err-pill">เลขอาจไม่ครบ</span></>}
@@ -89,6 +90,7 @@ export function Ads({ leads, range, page, adNames, goTags }: {
             ))}
           </div>
           <p className="desc">ค่าเฉลี่ยโฆษณา {avg}% จาก {fmt(adChats)} แชทใหม่ที่มีแท็กโฆษณา</p>
+          <p className="small">อันดับจากดีสุดไปแย่สุด ใช้ขอบล่าง Wilson 90% เพื่อหักความไม่แน่นอน ถ้าคะแนนเท่ากันให้แชทมากกว่าอยู่ก่อน · จัดอันดับเมื่อมีอย่างน้อย {MIN_CHATS} แชท</p>
 
           {judged.length > 0 ? <AdRows ads={judged} avg={avg} /> : (
             <p className="desc" style={{ fontSize: 14 }}>ยังไม่มีโฆษณาตัวไหนที่มีแชทถึง {MIN_CHATS} แชท ลองเลือกช่วงเวลาที่ยาวขึ้น</p>

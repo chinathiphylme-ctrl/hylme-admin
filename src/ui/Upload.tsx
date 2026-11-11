@@ -7,7 +7,8 @@ import { detectKind } from '../parse/detect'
 import { parseMessages } from '../parse/messages'
 import { parseOrders } from '../parse/orders'
 import { parseTagStats } from '../parse/tagStats'
-import type { MessagesResult, OrdersResult, TagStatsResult } from '../parse/types'
+import type { Candidate, MessagesResult, OrdersResult, TagStatsResult } from '../parse/types'
+import { Candidates } from './Candidates'
 import { loadCode, storeCode } from './code'
 import { uploadTime } from './Sidebar'
 import { existingKeys, KIND_LABEL, planUpload } from './uploadPlan'
@@ -98,6 +99,7 @@ export function Upload({ uploads, overrides, onSaved, goTags }: {
   const [code, setCode] = useState(loadCode)
   const [results, setResults] = useState<SaveState[]>([])
   const [error, setError] = useState('')
+  const [candidates, setCandidates] = useState<Candidate[] | null>(null)
   const input = useRef<HTMLInputElement>(null)
 
   const plan = useMemo(() => planUpload(parsed, existingKeys(uploads), overrides), [parsed, uploads, overrides])
@@ -130,6 +132,11 @@ export function Upload({ uploads, overrides, onSaved, goTags }: {
             : 'orders' in p ? await saveOrders(code, p.fileName, p.orders)
             : await saveMessages(code, p.fileName, p.convs)
           out.push({ fileName: p.fileName, ok: true, text: `บันทึกแล้ว ${n.toLocaleString('en-US')} แถว` })
+          if ('candidates' in p) setCandidates(prev => {
+            const combined = new Map((prev ?? []).map(c => [`${c.pageId}|${c.conversationId}`, c]))
+            for (const c of p.candidates) if (!combined.has(`${c.pageId}|${c.conversationId}`)) combined.set(`${c.pageId}|${c.conversationId}`, c)
+            return [...combined.values()]
+          })
         } catch (e) {
           out.push({ fileName: p.fileName, ok: false, text: `บันทึกไม่สำเร็จ: ${(e as Error).message}` })
         }
@@ -215,6 +222,7 @@ export function Upload({ uploads, overrides, onSaved, goTags }: {
           )) : <span>ยังไม่มีการอัปโหลด</span>}
         </div>
       </section>
+      {candidates !== null && <Candidates items={candidates} code={code} />}
     </div>
   )
 }

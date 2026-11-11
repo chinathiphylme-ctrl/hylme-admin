@@ -2,6 +2,7 @@ import { PAGES, pageName, type PageId } from '../config/pages'
 import { convStats, segmentRates, type Seen } from '../metrics/conversations'
 import { pageCompare, stuckRanking, summarize, trend } from '../metrics/daily'
 import { newChatCloses, type Lead } from '../metrics/leads'
+import { adminCloses } from '../metrics/admins'
 import { orderStats } from '../metrics/orders'
 import { addDays, daysIn, previousRange, type DateRange } from '../metrics/range'
 import type { ConvRow, OrderRow, TagRow } from '../parse/types'
@@ -59,6 +60,9 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
   })
   const seg = segmentRates(pageConvs, seen, range)
   const os = orderStats(orders, page)
+  const closes = adminCloses(leads, range, page)
+  const adminRows = [...os.admins, ...closes.filter(c => !os.admins.some(a => a.admin === c.admin))
+    .map(c => ({ admin: c.admin, revenue: 0, orders: 0, avg: 0, share: 0 }))]
   const aMax = Math.max(1, ...os.admins.map(a => a.revenue))
 
   const summary = s.newChats
@@ -141,7 +145,7 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '6px 16px' }}>
           <div className="stack" style={{ gap: 4 }}>
             <h2>ยอดขายรายแอดมิน</h2>
-            <p className="desc">จากไฟล์ออเดอร์ของ Pancake นับตามคนที่ยืนยันออเดอร์ ไม่รวมออเดอร์ที่ยกเลิก{page === 'all' ? '' : ' เฉพาะออเดอร์จากเพจนี้'}</p>
+            <p className="desc">จากไฟล์ออเดอร์ของ Pancake นับตามคนที่ยืนยันออเดอร์ ไม่รวมออเดอร์ที่ยกเลิกและบัญชี chinathiphylme{page === 'all' ? '' : ' เฉพาะออเดอร์จากเพจนี้'}</p>
           </div>
           {os.count > 0 && (
             <span style={{ fontSize: 14, color: '#435349' }}>
@@ -149,15 +153,18 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
             </span>
           )}
         </div>
-        {os.count > 0 ? (
+        {os.count > 0 || closes.some(c => c.chats > 0) ? (
           <div className="grid g-380">
             <div className="stack" style={{ gap: 12 }}>
-              {os.admins.map(a => (
+              {adminRows.map(a => (
                 <div key={a.admin} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: '4px 12px', fontSize: 14 }}>
                   <span style={{ fontWeight: 600 }}>{a.admin}</span>
                   <span className="num" style={{ textAlign: 'right' }}><b>฿{fmt(a.revenue)}</b> <span className="small">({a.share}%)</span></span>
                   <span style={{ gridColumn: '1 / -1' }}><Bar value={a.revenue} max={aMax} color={ACCENT} /></span>
                   <span className="small" style={{ gridColumn: '1 / -1' }}>{fmt(a.orders)} ออเดอร์ · เฉลี่ย ฿{fmt(a.avg)}/ออเดอร์</span>
+                  {closes.filter(c => c.admin === a.admin).map(c => <span key={c.admin} className="small" style={{ gridColumn: '1 / -1' }}>
+                    แชทที่ดูแล {fmt(c.chats)} · ปิดได้ {fmt(c.closed)} · อัตราปิด {c.rate == null ? '—' : `${c.rate}%`}
+                  </span>)}
                 </div>
               ))}
             </div>
@@ -178,6 +185,7 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
             <span>export ออเดอร์รายวันจาก Pancake (ไฟล์ orders_วันเดือน.xlsx) แล้วอัปโหลดที่เมนูอัปโหลดไฟล์ จะเห็นยอดขายและจำนวนออเดอร์ของแต่ละแอดมิน</span>
           </div>
         )}
+        <p className="small">อัตราปิดนับจากแท็กชื่อแอดมิน ตั้งแต่ 4 พ.ย. 2026 ที่เริ่มติดแท็กชื่อตอนตอบแชท · นับแชทที่เริ่มในช่วงที่เลือก แชทที่มีสองชื่อนับให้ทั้งสองคน</p>
       </section>
 
       {insights.length > 0 && (

@@ -1,5 +1,5 @@
 import type { PageId } from '../config/pages'
-import { GRADES, gradeStats, inStart, type Grade, type Lead } from '../metrics/leads'
+import { GRADES, gradeReasonCounts, gradeStats, inStart, type Grade, type Lead } from '../metrics/leads'
 import type { DateRange } from '../metrics/range'
 import { fmt } from './viewModel'
 
@@ -34,12 +34,19 @@ export function LeadGrades({ leads, range, page }: { leads: Lead[]; range: DateR
                 <span style={{ fontSize: 13, fontWeight: 600, ...GRADE_STYLE[grade], alignSelf: 'flex-start', borderRadius: 999, padding: '1px 10px' }}>{label}</span>
                 <span className="n">{fmt(s.chats)}</span>
                 <span className="small">{Math.round((s.chats / sel.length) * 100)}% ของแชทใหม่ · ปิดได้ {s.rate == null ? '—' : `${s.rate}%`}</span>
-                <span className="small">{hint}</span>
+                <p className="grade-why"><b>ทำไมเป็น {grade}:</b> {hint}</p>
+                <div className="grade-evidence">
+                  <b>ที่พบจริงใน {fmt(s.chats)} แชทนี้</b>
+                  {s.chats ? gradeReasonCounts(sel, grade).map(([reason, chats]) => <div key={reason} className="reason-row">
+                    <span>{reason}</span><b className="num">{fmt(chats)} แชท</b>
+                  </div>) : <span>ยังไม่มีแชทเกรดนี้ในวันที่หรือช่วงที่เลือก</span>}
+                </div>
               </div>
             )
           })}
         </div>
       )}
+      <p className="small">ตรวจเกณฑ์ตามลำดับ A → D → B → C · แชทหนึ่งอาจเข้าได้หลายเหตุผลในเกรดเดียวกัน จำนวนเหตุผลจึงรวมเกินจำนวนแชทได้ · เหตุผลนับจากไฟล์ที่มี ไม่ใช้ % ปิดการขายตัดสินเกรด และเกรด C ไม่ได้แปลว่าลูกค้าเงียบทุกคน</p>
       <p className="small">เกรดไม่ได้ดูว่าลูกค้าซื้อหรือให้เบอร์ แต่จำนวนข้อความรวมข้อความหลังตกลงซื้อด้วย เกรด A จึงมีคนที่กำลังซื้อปนอยู่ ใช้วัดคุณภาพลีดและจัดลำดับการตาม ไม่ใช่การทำนายล่วงหน้า</p>
     </section>
   )

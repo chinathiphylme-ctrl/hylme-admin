@@ -11,7 +11,7 @@ const tagFile: TagStatsResult = {
 }
 const msgFile: MessagesResult = {
   ok: true, fileName: 'msg.xlsx', days: ['2026-10-29'], pageIds: [FB], messageCount: 255,
-  convs: [{ day: '2026-10-29', conversationId: 'c1', pageId: FB, firstAt: '', lastAt: '', msgCount: 2, firstKind: 'typed', hasPhone: false, tags: ['นับ New Today', 'ติดตาม'], pancakeUrl: '' }],
+  candidates: [], convs: [{ day: '2026-10-29', conversationId: 'c1', pageId: FB, firstAt: '', lastAt: '', msgCount: 2, firstKind: 'typed', hasPhone: false, topics: [], tags: ['นับ New Today', 'ติดตาม'], pancakeUrl: '' }],
 }
 const badFile: TagStatsResult = { ok: false, fileName: 'all.xlsx', error: 'ไฟล์นี้เป็นแบบรวมทุกเพจ กรุณา export แบบแยกเพจ' }
 

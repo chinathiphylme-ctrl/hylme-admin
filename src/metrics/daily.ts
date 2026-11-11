@@ -72,7 +72,7 @@ export function summarize(rows: TagRow[], overrides: Record<string, string>, ran
       }
     }),
     products: listed('สินค้า'),
-    sources: SOURCES.map(([label, tags]) => [label, tags.reduce((s, t) => s + tag(t), 0)]),
+    sources: SOURCES.map(([label, tags]) => [label, Math.max(0, tags.reduce((s, t) => s + tag(t), 0))]),
     ads: listed('โฆษณา'),
   }
 }

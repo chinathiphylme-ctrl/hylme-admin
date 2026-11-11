@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { daysIn, previousRange, rangeFor } from '../src/metrics/range'
 
 describe('ranges', () => {
+  it('selects exactly one past day while keeping preset periods anchored to the latest upload', () => {
+    const r = rangeFor('day', '2026-11-10', undefined, '2026-11-09')
+    expect(r).toEqual({ from: '2026-11-09', to: '2026-11-09' })
+    expect(previousRange(r)).toEqual({ from: '2026-11-08', to: '2026-11-08' })
+    expect(rangeFor('7d', '2026-11-10', undefined, '2026-11-09')).toEqual({ from: '2026-11-04', to: '2026-11-10' })
+  })
   it('builds a 7-day range and the period before it', () => {
     const r = rangeFor('7d', '2026-10-29')
     expect(r).toEqual({ from: '2026-10-23', to: '2026-10-29' })

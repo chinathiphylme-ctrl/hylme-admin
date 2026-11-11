@@ -1,15 +1,35 @@
 import { describe, expect, it } from 'vitest'
 import { isAdTag } from '../src/grouping/rules'
-import { gradeOf, gradeStats, inStart, newChatCloses, toLeads, type Lead } from '../src/metrics/leads'
+import { explainGrade, gradeOf, gradeReasonCounts, gradeStats, inStart, newChatCloses, toLeads, type Lead } from '../src/metrics/leads'
 import type { ConvRow } from '../src/parse/types'
 
 const row = (conversationId: string, day: string, tags: string[], over: Partial<ConvRow> = {}): ConvRow => ({
   day, conversationId, pageId: '100379779472465', firstAt: `${day}T10:00:00+07:00`, lastAt: `${day}T12:00:00+07:00`,
-  msgCount: 1, firstKind: 'typed', hasPhone: false, tags, pancakeUrl: 'https://pancake.vn/x', ...over,
+  msgCount: 1, firstKind: 'typed', hasPhone: false, tags, topics: [], pancakeUrl: 'https://pancake.vn/x', ...over,
 })
 const g = (tags: string[], msgs: number, days: number, typedFirst: boolean) => gradeOf({ tags, msgs, days, typedFirst })
 
 describe('gradeOf', () => {
+  it('explains the winning grade, including multiple matching reasons, without using purchase outcomes', () => {
+    expect(explainGrade({ tags: ['5.พร้อมสั่ง', 'ไม่สนใจ', 'ปิดAds'], msgs: 4, days: 2, typedFirst: true })).toEqual({
+      grade: 'A', reasons: ['มีแท็กพร้อมสั่ง (5.)', 'มีข้อความอย่างน้อย 4 ข้อความ', 'พบแชทอย่างน้อย 2 วัน'],
+    })
+    expect(explainGrade({ tags: ['ไม่สนใจ', '3. ขอโปรโมชั่น'], msgs: 2, days: 1, typedFirst: true })).toEqual({ grade: 'D', reasons: ['มีแท็กไม่สนใจ'] })
+  })
+  it('explains C button chats with two or three messages without claiming they are silent', () => {
+    for (const msgs of [2, 3]) expect(explainGrade({ tags: ['2.ขอราคา'], msgs, days: 1, typedFirst: false }))
+      .toEqual({ grade: 'C', reasons: [`เริ่มจากปุ่ม มี ${msgs} ข้อความ`] })
+  })
+  it('counts only actual matching reasons inside the assigned grade', () => {
+    const ls = toLeads([
+      row('a', '2026-11-10', ['10/11', '5.พร้อมสั่ง'], { msgCount: 4 }),
+      row('b', '2026-11-10', ['10/11'], { msgCount: 4 }),
+      row('d', '2026-11-10', ['10/11', 'ไม่สนใจ', '3. ขอโปรโมชั่น']),
+    ])
+    expect(gradeReasonCounts(ls, 'A')).toEqual([['มีข้อความอย่างน้อย 4 ข้อความ', 2], ['มีแท็กพร้อมสั่ง (5.)', 1]])
+    expect(gradeReasonCounts(ls, 'B')).toEqual([])
+    expect(gradeReasonCounts(ls, 'D')).toEqual([['มีแท็กไม่สนใจ', 1]])
+  })
   it('puts A before D', () => expect(g(['5.พร้อมสั่ง', 'ไม่สนใจ'], 1, 1, false)).toBe('A'))
   it('puts D before B', () => expect(g(['ไม่สนใจ', '3. ขอโปรโมชั่น'], 1, 1, true)).toBe('D'))
   it('grades 4+ messages A', () => expect(g([], 4, 1, false)).toBe('A'))

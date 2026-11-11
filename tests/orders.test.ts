@@ -77,6 +77,21 @@ describe('parseOrders', () => {
 })
 
 describe('orderStats', () => {
+  it('excludes chinathiphylme from the admin report and recalculates every displayed total without deleting source rows', () => {
+    const data = parse([
+      order('noon', { 'มูลค่าคำสั่งซื้อหลังหักส่วนลด': 30975, 'จำนวน': 60 }),
+      order('koy', { 'มูลค่าคำสั่งซื้อหลังหักส่วนลด': 1260, 'จำนวน': 3, 'พนักงานยืนยัน': 'จิตรานนท์ ชิตานุช' }),
+      order('exclude', { 'มูลค่าคำสั่งซื้อหลังหักส่วนลด': 3130, 'จำนวน': 9, 'พนักงานยืนยัน': 'chinathiphylme', 'แหล่งที่มาของคำสั่งซื้อ': 'Telesales' }),
+    ]).orders
+    const s = orderStats(data, 'all')
+    expect(s.admins.map(a => a.admin)).toEqual(['นุ่น', 'พี่ก้อย'])
+    expect(s.admins.map(a => a.share)).toEqual([96.1, 3.9])
+    expect([s.count, s.revenue, s.avg, s.cod]).toEqual([2, 32235, 16118, 2])
+    expect(s.products).toEqual([['Daily Oils Blend 60 Softgel', 63]])
+    expect(s.sources).toEqual([['Facebook / Hylme', 2]])
+    expect(data).toHaveLength(3)
+    expect(orderStats(data.map(o => ({ ...o, admin: ' CHINATHIPHYLME ' })), 'all').count).toBe(0)
+  })
   const r = parse([
     order('1', { 'มูลค่าคำสั่งซื้อหลังหักส่วนลด': 1000 }),
     order('2', { 'มูลค่าคำสั่งซื้อหลังหักส่วนลด': 500, 'พนักงานยืนยัน': 'จิตรานนท์ ชิตานุช', 'แหล่งที่มาของคำสั่งซื้อ': `Facebook / Hylme ครบจบเรื่องไขมัน (${FAT})` }),

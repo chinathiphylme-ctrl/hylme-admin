@@ -2,7 +2,7 @@ import { PAGES, type PageId } from '../config/pages'
 import { CLOSE_TAGS } from '../grouping/rules'
 import type { Seen } from '../metrics/conversations'
 import type { Quote, QuoteCategory } from '../metrics/quotes'
-import { previousRange, type DateRange } from '../metrics/range'
+import { daysIn, previousRange, type DateRange } from '../metrics/range'
 import type { ConvRow, OrderRow, TagRow } from '../parse/types'
 import { db } from './client'
 import { fromDbConv, fromDbOrder, fromDbTagRow, type DbConv, type DbOrder, type DbTagRow } from './mappers'
@@ -38,22 +38,36 @@ export async function fetchLatestDay(): Promise<string | null> {
 export async function fetchDays(): Promise<string[]> {
   const rows = await all<{ day_from: string | null; day_to: string | null; kind: string }>((a, b) =>
     db().from('uploads').select('day_from,day_to,kind').eq('kind', 'tagStats').order('id').range(a, b))
-  return [...new Set(rows.flatMap(r => (r.day_from ? [r.day_from, r.day_to ?? r.day_from] : [])))].sort()
+  return [...new Set(rows.flatMap(r => (r.day_from ? daysIn({ from: r.day_from, to: r.day_to ?? r.day_from }) : [])))].sort()
 }
 
 const CONV_COLS = 'day,conversation_id,page_id,first_at,last_at,msg_count,first_kind,has_phone,tags,pancake_url'
 
+// Keep the existing dashboard readable until the topics migration is installed.
+async function conversationRows(query: (cols: string, from: number, to: number) => Page<DbConv>): Promise<DbConv[]> {
+  let missingTopics = false
+  const rows = await all<DbConv>(async (a, b) => {
+    const result = await query(missingTopics ? CONV_COLS : `${CONV_COLS},topics`, a, b)
+    if (result.error && /(?:column.*topics.*does not exist|could not find.*topics.*column)/i.test(result.error.message)) {
+      missingTopics = true
+      return await query(CONV_COLS, a, b)
+    }
+    return result
+  })
+  return rows
+}
+
 export async function fetchConvs(r: DateRange): Promise<ConvRow[]> {
-  const rows = await all<DbConv>((a, b) =>
-    db().from('conversations').select(CONV_COLS).gte('day', r.from).lte('day', r.to)
-      .order('day').order('conversation_id').range(a, b))
+  const rows = await conversationRows((cols, a, b) =>
+    db().from('conversations').select(cols).gte('day', r.from).lte('day', r.to)
+      .order('day').order('conversation_id').range(a, b).returns<DbConv[]>())
   return rows.map(fromDbConv)
 }
 
 // every export row of every chat; leads need each chat's whole history (about 2,100 rows on 11/11/2026)
 export async function fetchAllConvs(): Promise<ConvRow[]> {
-  const rows = await all<DbConv>((a, b) =>
-    db().from('conversations').select(CONV_COLS).order('day').order('conversation_id').range(a, b))
+  const rows = await conversationRows((cols, a, b) =>
+    db().from('conversations').select(cols).order('day').order('conversation_id').range(a, b).returns<DbConv[]>())
   return rows.map(fromDbConv)
 }
 
@@ -72,8 +86,8 @@ export async function fetchLatestConvs(): Promise<ConvRow[]> {
     if (error) throw new Error(error.message)
     const day = data?.[0]?.day
     if (!day) return []
-    const rows = await all<DbConv>((a, b) =>
-      db().from('conversations').select(CONV_COLS).eq('page_id', id).eq('day', day).order('conversation_id').range(a, b))
+    const rows = await conversationRows((cols, a, b) =>
+      db().from('conversations').select(cols).eq('page_id', id).eq('day', day).order('conversation_id').range(a, b).returns<DbConv[]>())
     return rows.map(fromDbConv)
   }))
   return perPage.flat()

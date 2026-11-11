@@ -14,8 +14,17 @@ export const checkCode = (code: string) => rpc<boolean>('check_code', { p_code: 
 export const saveTagStats = (code: string, fileName: string, rows: TagRow[]) =>
   rpc<number>('save_tag_stats', { p_code: code, p_file: fileName, p_rows: rows.map(toDbTagRow) })
 
-export const saveMessages = (code: string, fileName: string, convs: ConvRow[]) =>
-  rpc<number>('save_messages', { p_code: code, p_file: fileName, p_convs: convs.map(toDbConv) })
+export const saveMessages = async (code: string, fileName: string, convs: ConvRow[]) => {
+  // Older RPCs silently ignore unknown JSON fields; don't report topics as saved in that case.
+  const { error } = await db().from('conversations').select('topics').limit(0)
+  if (error) {
+    if (/(?:column.*topics.*does not exist|could not find.*topics.*column)/i.test(error.message)) {
+      throw new Error('ต้องปรับฐานข้อมูลสำหรับหัวข้อก่อน กรุณาให้เจ้าของระบบรัน migration topics แล้วอัปโหลดอีกครั้ง')
+    }
+    throw new Error(error.message)
+  }
+  return rpc<number>('save_messages', { p_code: code, p_file: fileName, p_convs: convs.map(toDbConv) })
+}
 
 export const saveTagGroup = (code: string, tag: string, grp: string, adName: string) =>
   rpc<void>('set_tag_group', { p_code: code, p_tag: tag, p_grp: grp, p_ad_name: adName })

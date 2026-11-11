@@ -1,4 +1,5 @@
 import type { PageId } from '../config/pages'
+import { EXCLUDED_SALES_ADMINS } from '../config/admins'
 import type { OrderRow } from '../parse/types'
 
 export type AdminSales = { admin: string; orders: number; revenue: number; avg: number; share: number }
@@ -6,7 +7,7 @@ export type AdminSales = { admin: string; orders: number; revenue: number; avg: 
 const live = (o: OrderRow) => !o.status.includes('ยกเลิก')
 
 export function orderStats(orders: OrderRow[], page: PageId | 'all') {
-  const xs = orders.filter(o => live(o) && (page === 'all' || o.pageId === page))
+  const xs = orders.filter(o => live(o) && !EXCLUDED_SALES_ADMINS.has(o.admin.trim().toLowerCase()) && (page === 'all' || o.pageId === page))
   const revenue = xs.reduce((s, o) => s + o.amount, 0)
   const byAdmin = new Map<string, { orders: number; revenue: number }>()
   const products = new Map<string, number>()

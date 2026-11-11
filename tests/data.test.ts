@@ -12,6 +12,7 @@ const conv: ConvRow = {
   firstKind: 'button',
   hasPhone: true,
   tags: ['29/10', 'มะกอก'],
+  topics: ['ราคา/แพง'],
   pancakeUrl: 'https://pancake.vn/x',
 }
 
@@ -22,7 +23,7 @@ describe('mappers', () => {
 
   it('sends only the spec §4 conversation columns', () => {
     expect(Object.keys(toDbConv(conv)).sort()).toEqual(
-      ['conversation_id', 'day', 'first_at', 'first_kind', 'has_phone', 'last_at', 'msg_count', 'page_id', 'pancake_url', 'tags'])
+      ['conversation_id', 'day', 'first_at', 'first_kind', 'has_phone', 'last_at', 'msg_count', 'page_id', 'pancake_url', 'tags', 'topics'])
   })
 
   it('reads timestamps that Postgres returns in UTC as Bangkok time', () => {

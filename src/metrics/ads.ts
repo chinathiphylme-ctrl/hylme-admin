@@ -17,6 +17,7 @@ export type Verdict = 'ดี' | 'ไม่ดี' | 'กลางๆ' | 'ข้
 export const VERDICTS: Verdict[] = ['ดี', 'ไม่ดี', 'กลางๆ', 'ข้อมูลยังน้อย']
 
 export type AdScore = {
+  rank: number | null
   tag: string; name: string | null; chats: number; good: number; closed: number; rate: number
   verdict: Verdict; pages: PageId[]; firstDay: string; lastDay: string; shortId: boolean
 }
@@ -37,6 +38,7 @@ export function adScores(leads: Lead[], adNames: Record<string, string>, page: P
     const [lo, hi] = wilson(closed, xs.length)
     const verdict: Verdict = xs.length < MIN_CHATS ? 'ข้อมูลยังน้อย' : lo > p ? 'ดี' : hi < p ? 'ไม่ดี' : 'กลางๆ'
     return {
+      rank: null,
       tag,
       name: adNames[tag] ?? null,
       chats: xs.length,
@@ -50,6 +52,9 @@ export function adScores(leads: Lead[], adNames: Record<string, string>, page: P
       shortId: tag.length < 15,
     }
   })
-  ads.sort((a, b) => VERDICTS.indexOf(a.verdict) - VERDICTS.indexOf(b.verdict) || b.chats - a.chats)
+  ads.sort((a, b) => Number(a.chats < MIN_CHATS) - Number(b.chats < MIN_CHATS)
+    || (a.chats >= MIN_CHATS && b.chats >= MIN_CHATS ? wilson(b.closed, b.chats)[0] - wilson(a.closed, a.chats)[0] : 0)
+    || b.chats - a.chats || a.tag.localeCompare(b.tag))
+  ads.forEach((a, i) => { if (a.chats >= MIN_CHATS) a.rank = i + 1 })
   return { avg: pct(p * sel.length, sel.length), adChats: sel.length, ads }
 }

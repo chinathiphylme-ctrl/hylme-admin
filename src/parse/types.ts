@@ -1,4 +1,5 @@
 import type { PageId } from '../config/pages'
+import type { Topic } from './topics'
 
 export type Sheet = { name: string; rows: unknown[][] }
 
@@ -20,6 +21,7 @@ export type ConvRow = {
   firstKind: FirstKind
   hasPhone: boolean
   tags: string[]
+  topics: string[]
   pancakeUrl: string
 }
 
@@ -44,5 +46,7 @@ export type OrdersResult =
   | { ok: false; fileName: string; error: string }
 
 export type MessagesResult =
-  | { ok: true; fileName: string; convs: ConvRow[]; days: string[]; pageIds: PageId[]; messageCount: number }
+  | { ok: true; fileName: string; convs: ConvRow[]; days: string[]; pageIds: PageId[]; messageCount: number; candidates: Candidate[] }
   | { ok: false; fileName: string; error: string }
+
+export type Candidate = { conversationId: string; pageId: PageId; day: string; text: string; topic: Topic }

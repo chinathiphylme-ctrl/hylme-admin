@@ -13,6 +13,7 @@ const conv = (tags: string[], over: Partial<ConvRow> = {}): ConvRow => ({
   firstKind: 'typed',
   hasPhone: false,
   tags,
+  topics: [],
   pancakeUrl: 'https://pancake.vn/x',
   ...over,
 })

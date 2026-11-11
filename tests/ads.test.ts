@@ -7,7 +7,7 @@ const FAT = '516356078238016'
 let n = 0
 const lead = (ads: string[], closed: boolean, over: Partial<Lead> = {}): Lead => ({
   conversationId: `l${++n}`, pageId: FB, startDay: '2026-11-01', lastDay: '2026-11-02', isNew: true,
-  tags: ads, msgs: 1, days: 1, phone: false, typedFirst: false, closed, ads, ...over,
+  tags: ads, topics: [], msgs: 1, days: 1, phone: false, typedFirst: false, closed, ads, ...over,
 })
 const many = (k: number, ad: string[], closed: number, over: Partial<Lead> = {}) =>
   Array.from({ length: k }, (_, i) => lead(ad, i < closed, over))
@@ -26,12 +26,20 @@ describe('wilson', () => {
 
 describe('adScores', () => {
   const X = '120250983524320', Y = '120250983982390', Z = '120251252805530'
-  it('judges each ad against the average, then sorts by verdict', () => {
+  it('ranks judged ads by Wilson lower bound, leaving tiny samples unranked', () => {
+    const W = '120250983000000'
+    const r = adScores([...many(21, [X], 0), ...many(100, [Y], 30), ...many(50, [W], 9), ...many(5, [Z], 5)], {}, 'all')
+    expect(r.ads.map(a => [a.tag, a.rank])).toEqual([[Y, 1], [W, 2], [X, 3], [Z, null]])
+  })
+  it('breaks equal confidence scores by chat count', () => {
+    expect(adScores([...many(15, [X], 0), ...many(30, [Y], 0)], {}, 'all').ads.map(a => a.tag)).toEqual([Y, X])
+  })
+  it('judges each ad against the average, then sorts by confidence-adjusted rank', () => {
     const r = adScores([...many(21, [X], 0), ...many(100, [Y], 30), ...many(5, [Z], 5)], {}, 'all')
     expect(r.avg).toBe(27.8)
     expect(r.adChats).toBe(126)
-    expect(r.ads.map(a => [a.tag, a.verdict])).toEqual([[X, 'ไม่ดี'], [Y, 'กลางๆ'], [Z, 'ข้อมูลยังน้อย']])
-    expect(r.ads[1]).toMatchObject({ chats: 100, closed: 30, rate: 30 })
+    expect(r.ads.map(a => [a.tag, a.verdict])).toEqual([[Y, 'กลางๆ'], [X, 'ไม่ดี'], [Z, 'ข้อมูลยังน้อย']])
+    expect(r.ads[0]).toMatchObject({ chats: 100, closed: 30, rate: 30 })
   })
   it('counts a two-ad chat once in the average and once per ad', () => {
     const r = adScores([lead([X, Y], true), lead([X], false)], {}, 'all')

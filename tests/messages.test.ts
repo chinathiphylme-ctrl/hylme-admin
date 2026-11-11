@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { parseMessages } from '../src/parse/messages'
+import { ADDRESS_RE, parseMessages, pickCandidates } from '../src/parse/messages'
+import { toDbConv } from '../src/data/mappers'
 import { messageSheets } from './fixtures/build'
 
 const FB = '100379779472465'
@@ -19,6 +20,42 @@ const msg = (conv: string, at: string, text: string | null, extra: Record<string
   'ผู้ใช้ที่ได้รับมอบหมาย': 'แอดมินทดสอบ',
   'หมายเลขโทรศัพท์': '0800000000',
   ...extra,
+})
+
+describe('topics and in-memory candidates', () => {
+  const m = (conv: string, text: string, at = '2026-11-06T10:00:00+07:00') => ({ conv, text, at, page: FB as '100379779472465' })
+  it('unions topics per chat and never copies sentences into persisted rows', () => {
+    const r = parse([msg('c1', '6/11/2026 10:00:00', 'แพงจัง'), msg('c1', '6/11/2026 11:00:00', 'ส่งปลายทางได้ไหม')])
+    expect(r.convs[0].topics).toEqual(['ราคา/แพง', 'ส่งของ/จ่ายเงิน'])
+    const persisted = JSON.stringify(r.convs.map(toDbConv))
+    expect(persisted).not.toContain('แพงจัง')
+    expect(persisted).not.toContain('ส่งปลายทางได้ไหม')
+    expect(persisted).not.toContain('text')
+  })
+  it.each([
+    'บ้านเลขที่ 12 ม.3 ต.บางรัก 0812345678 ส่งปลายทางค่ะ',
+    'ขอรีวิวหน่อยค่ะ อยู่ตำบลบางรัก', 'แพงจังค่ะ ส่งไปที่ถนนสุขุมวิท',
+    'ขอรีวิวหน่อยค่ะ ไปรษณีย์ 10110', 'แพงจังค่ะ ติดต่อ a@example.com',
+    'แพงจัง', 'สนใจ', 'ราคา', 'ช่วยเช็คราคาสินค้าหน่อยได้ไหม', 'แพง'.repeat(101),
+    'จัดส่งปลายทางได้ไหมคะ',
+  ])('excludes private or ineligible sentence: %s', text => expect(pickCandidates([m('a', text)])).toEqual([]))
+  it('masks phones, keeps a rare topic first, and strips internal sort timestamps', () => {
+    expect(pickCandidates([m('a', 'โทรมา 0812345678 ถามว่ากินคู่ยาความดันได้ไหมคะ')])).toEqual([
+      { conversationId: 'a', pageId: FB, day: '2026-11-06', text: 'โทรมา [เบอร์] ถามว่ากินคู่ยาความดันได้ไหมคะ', topic: 'กลัวผลข้างเคียง' },
+    ])
+  })
+  it('takes the earliest eligible sentence per chat before prioritizing rare topics', () => {
+    const r = pickCandidates([m('a', 'ขอคิดก่อนนะคะ ขอถามสามีก่อนค่ะ', '2026-11-06T11:00:00+07:00'),
+      m('a', 'ราคาแพงจังเลยนะคะ ลดได้อีกไหม'), m('b', 'ขอคิดก่อนนะคะ ขอถามลูกก่อนค่ะ')])
+    expect(r.map(c => [c.conversationId, c.topic])).toEqual([['b', 'ขอคิดก่อน'], ['a', 'ราคา/แพง']])
+  })
+  it('limits each file to thirty distinct chats and rejects addresses after phone masking', () => {
+    const r = pickCandidates(Array.from({ length: 40 }, (_, i) => m(`c${i}`, 'ราคาแพงจังเลยนะคะ ลดได้อีกไหม')))
+    expect(r).toHaveLength(30)
+    expect(new Set(r.map(c => c.conversationId)).size).toBe(30)
+    expect(r.every(c => !ADDRESS_RE.test(c.text))).toBe(true)
+    expect(pickCandidates([])).toEqual([])
+  })
 })
 
 const parse = (rows: Record<string, unknown>[]) => {

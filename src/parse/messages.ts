@@ -1,9 +1,12 @@
 import { isPageId, type PageId } from '../config/pages'
 import { CONV_ID_COL } from './detect'
 import { ERR_NO_PAGE } from './tagStats'
-import type { ConvRow, FirstKind, MessagesResult, Sheet } from './types'
+import type { Candidate, ConvRow, FirstKind, MessagesResult, Sheet } from './types'
+import { maskPhones } from '../metrics/quotes'
+import { CANDIDATE_ORDER, TOPICS, topicsOf } from './topics'
+import { BUTTON_RE } from './buttons'
 
-export const BUTTON_RE = /^(สนใจ(สั่งซื้อ)?|ราคา(เท่าไร)?|ช่วยเช็คราคาสินค้าหน่อยได้ไหม|ปริมาณ-ราคา)(ค่ะ|ครับ|คะ)?$/
+export { BUTTON_RE } from './buttons'
 export const ERR_NO_MESSAGE_HEADER = 'หาหัวตารางไฟล์ข้อความไม่เจอ'
 
 const COL = {
@@ -35,7 +38,27 @@ function kindOf(text: unknown): FirstKind {
   return BUTTON_RE.test(t) ? 'button' : 'typed'
 }
 
-type Msg = { conv: string; page: PageId; at: string; tags: string; phone: boolean; link: string; kind: FirstKind }
+type Msg = { conv: string; page: PageId; at: string; tags: string; phone: boolean; link: string; kind: FirstKind; text: string }
+
+export const ADDRESS_RE = /บ้านเลขที่|ตำบล|ต\.|อำเภอ|อ\.|จังหวัด|จ\.|รหัสไปรษณีย์|ถนน|หมู่|ม\.\s*\d|\d{5}/
+const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/
+
+export function pickCandidates(msgs: { conv: string; page: PageId; at: string; text: string }[]): Candidate[] {
+  const picked = new Map<string, Candidate & { at: string }>()
+  for (const m of [...msgs].sort((a, b) => a.at.localeCompare(b.at))) {
+    const key = `${m.page}|${m.conv}`
+    const raw = m.text.trim()
+    // Mask phones before checking five-digit postcodes, otherwise every phone is rejected.
+    const text = maskPhones(raw)
+    if (picked.has(key) || raw.length < 15 || raw.length > 300 || ADDRESS_RE.test(text) || EMAIL_RE.test(text)) continue
+    const topics = topicsOf(raw)
+    const topic = CANDIDATE_ORDER.find(t => topics.includes(t))
+    if (topic) picked.set(key, { conversationId: m.conv, pageId: m.page, day: m.at.slice(0, 10), text, topic, at: m.at })
+  }
+  return [...picked.values()]
+    .sort((a, b) => CANDIDATE_ORDER.indexOf(a.topic) - CANDIDATE_ORDER.indexOf(b.topic) || a.at.localeCompare(b.at))
+    .slice(0, 30).map(({ at: _at, ...candidate }) => candidate)
+}
 
 export function parseMessages(sheets: Sheet[], fileName: string): MessagesResult {
   const fail = (error: string): MessagesResult => ({ ok: false, fileName, error })
@@ -51,13 +74,14 @@ export function parseMessages(sheets: Sheet[], fileName: string): MessagesResult
       const page = String(r[idx.page] ?? '').trim()
       const at = toBangkokIso(r[idx.at])
       if (!conv || !at || !isPageId(page)) continue
-      // message text is read only here, to classify it, and never stored
+      // Raw text stays in this local parse only; ConvRow and the database payload contain no text.
       msgs.push({
         conv, page, at,
         tags: String(r[idx.tags] ?? ''),
         phone: String(r[idx.phone]).toLowerCase() === 'true',
         link: String(r[idx.link] ?? ''),
         kind: kindOf(r[idx.text]),
+        text: String(r[idx.text] ?? ''),
       })
     }
   }
@@ -81,6 +105,7 @@ export function parseMessages(sheets: Sheet[], fileName: string): MessagesResult
       firstKind: first.kind,
       hasPhone: list.some(m => m.phone),
       tags: last.tags.split(',').map(t => t.trim()).filter(Boolean),
+      topics: TOPICS.filter(t => list.some(m => topicsOf(m.text).includes(t))),
       pancakeUrl: last.link,
     }
   })
@@ -91,5 +116,6 @@ export function parseMessages(sheets: Sheet[], fileName: string): MessagesResult
     days: [...new Set(convs.map(c => c.day))].sort(),
     pageIds: [...new Set(convs.map(c => c.pageId))],
     messageCount: msgs.length,
+    candidates: pickCandidates(msgs),
   }
 }

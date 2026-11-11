@@ -4,7 +4,7 @@ import type { ConvRow, FirstKind, OrderItem, OrderRow, TagRow } from '../parse/t
 export type DbTagRow = { day: string; page_id: string; tag: string; color: string; count: number }
 export type DbConv = {
   day: string; conversation_id: string; page_id: string; first_at: string; last_at: string
-  msg_count: number; first_kind: string; has_phone: boolean; tags: string[]; pancake_url: string
+  msg_count: number; first_kind: string; has_phone: boolean; tags: string[]; topics?: string[]; pancake_url: string
 }
 
 // Postgres returns timestamptz in UTC; the app works in Bangkok wall time
@@ -26,6 +26,7 @@ export const toDbConv = (c: ConvRow): DbConv => ({
   first_kind: c.firstKind,
   has_phone: c.hasPhone,
   tags: c.tags,
+  topics: c.topics,
   pancake_url: c.pancakeUrl,
 })
 
@@ -39,6 +40,7 @@ export const fromDbConv = (c: DbConv): ConvRow => ({
   firstKind: c.first_kind as FirstKind,
   hasPhone: c.has_phone,
   tags: c.tags,
+  topics: c.topics ?? [],
   pancakeUrl: c.pancake_url,
 })
 

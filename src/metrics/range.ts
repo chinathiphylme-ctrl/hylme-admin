@@ -8,9 +8,9 @@ export function addDays(day: string, n: number): string {
   return toDay(toTime(day) + n * 864e5)
 }
 
-export function rangeFor(key: RangeKey, latest: string, custom?: DateRange): DateRange {
+export function rangeFor(key: RangeKey, latest: string, custom?: DateRange, selectedDay?: string): DateRange {
   switch (key) {
-    case 'day': return { from: latest, to: latest }
+    case 'day': return { from: selectedDay ?? latest, to: selectedDay ?? latest }
     case '7d': return { from: addDays(latest, -6), to: latest }
     case '30d': return { from: addDays(latest, -29), to: latest }
     case 'month': return { from: `${latest.slice(0, 8)}01`, to: latest }

@@ -7,11 +7,14 @@ import { addDays } from '../metrics/range'
 import { QUOTE_CATEGORIES, QUOTE_MAX, categoryCounts, filterQuotes, maskPhones, type Quote, type QuoteCategory } from '../metrics/quotes'
 import { loadCode, storeCode } from './code'
 import { fmt, thaiDay } from './viewModel'
+import type { Lead } from '../metrics/leads'
+import { Reasons } from './Reasons'
+import { DaySelect } from './DaySelect'
 
 const today = () => toBangkokIsoFromAny(new Date().toISOString()).slice(0, 10)
 const PERIODS: [label: string, days: number | null][] = [['7 วัน', 7], ['30 วัน', 30], ['ทั้งหมด', null]]
 
-export function Quotes() {
+export function Quotes({ leads, days }: { leads: Lead[]; days: string[] }) {
   const [quotes, setQuotes] = useState<Quote[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
@@ -28,6 +31,7 @@ export function Quotes() {
   const [fCat, setFCat] = useState<QuoteCategory | 'all'>('all')
   const [fPage, setFPage] = useState<PageId | 'all'>('all')
   const [period, setPeriod] = useState<number | null>(30)
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
 
   useEffect(() => {
     let live = true
@@ -58,8 +62,8 @@ export function Quotes() {
     'บันทึกแล้ว', () => { setText(''); setNote('') })
   const remove = (q: Quote) => run(() => deleteQuote(code, q.id), 'ลบแล้ว')
 
-  const from = period ? addDays(today(), -(period - 1)) : null
-  const inScope = filterQuotes(quotes ?? [], { category: 'all', page: fPage, from })
+  const from = selectedDay ?? (period ? addDays(today(), -(period - 1)) : null)
+  const inScope = filterQuotes(quotes ?? [], { category: 'all', page: fPage, from }).filter(q => !selectedDay || q.day === selectedDay)
   const shown = filterQuotes(inScope, { category: fCat, page: 'all', from: null })
   const counts = categoryCounts(inScope)
 
@@ -68,6 +72,23 @@ export function Quotes() {
       <p style={{ fontSize: 15, color: '#24352C', maxWidth: '72ch' }}>
         เก็บประโยคที่ลูกค้าพูดแล้วการตลาดควรรู้ เช่น เหตุผลที่ไม่ซื้อ ข้อสงสัย หรือคำชม เลือกหมวดให้ตรง จะได้เห็นว่าลูกค้าพูดถึงเรื่องไหนบ่อย
       </p>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="chips" role="group" aria-label="ช่วงเวลา">
+          {PERIODS.map(([label, d]) => (
+            <button key={label} type="button" className="chip" aria-pressed={!selectedDay && period === d} onClick={() => { setPeriod(d); setSelectedDay(null) }}>{label}</button>
+          ))}
+          <DaySelect days={[...days, ...quotes?.map(q => q.day) ?? []]} value={selectedDay ?? ''} onChange={setSelectedDay} />
+        </div>
+        <label className="field" style={{ flex: '0 1 220px' }}>
+          <select aria-label="เพจ" value={fPage} onChange={e => setFPage(e.target.value as PageId | 'all')}>
+            <option value="all">ทุกเพจ</option>
+            {PAGES.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </label>
+      </div>
+
+      <Reasons leads={leads.filter(l => l.isNew && (fPage === 'all' || l.pageId === fPage) && (!from || l.startDay >= from) && l.startDay <= (selectedDay ?? today()))} />
 
       <section className="card" aria-label="เพิ่มประโยค">
         <h2>เพิ่มประโยคที่ลูกค้าพูด</h2>
@@ -105,20 +126,6 @@ export function Quotes() {
           {msg && <p className={msg.ok ? 'msg-ok' : 'msg-err'} role="status">{msg.text}</p>}
         </div>
       </section>
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
-        <div className="chips" role="group" aria-label="ช่วงเวลา">
-          {PERIODS.map(([label, d]) => (
-            <button key={label} type="button" className="chip" aria-pressed={period === d} onClick={() => setPeriod(d)}>{label}</button>
-          ))}
-        </div>
-        <label className="field" style={{ flex: '0 1 220px' }}>
-          <select aria-label="เพจ" value={fPage} onChange={e => setFPage(e.target.value as PageId | 'all')}>
-            <option value="all">ทุกเพจ</option>
-            {PAGES.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </label>
-      </div>
 
       <div className="filter-cards" role="group" aria-label="กรองตามหมวด">
         <button type="button" className="fcard" aria-pressed={fCat === 'all'} onClick={() => setFCat('all')}>

@@ -1,14 +1,15 @@
 import { PAGES, type PageId } from '../config/pages'
 import type { DateRange, RangeKey } from '../metrics/range'
-import { thaiDay } from './viewModel'
+import { DaySelect } from './DaySelect'
 
-export function FilterBar({ rangeKey, setRangeKey, custom, setCustom, latest, multiDay, page, setPage }: {
+export function FilterBar({ rangeKey, setRangeKey, custom, setCustom, latest, days, selectedDay, setDay, multiDay, page, setPage }: {
   rangeKey: RangeKey; setRangeKey: (k: RangeKey) => void
   custom: DateRange; setCustom: (r: DateRange) => void
   latest: string; multiDay: boolean
+  days: string[]; selectedDay: string; setDay: (day: string) => void
   page: PageId | 'all'; setPage: (p: PageId | 'all') => void
 }) {
-  const ranges: [RangeKey, string][] = [['day', thaiDay(latest)], ['7d', '7 วัน'], ['30d', '30 วัน'], ['month', 'เดือนนี้'], ['custom', 'กำหนดเอง']]
+  const ranges: [RangeKey, string][] = [['day', 'รายวัน'], ['7d', '7 วัน'], ['30d', '30 วัน'], ['month', 'เดือนนี้'], ['custom', 'กำหนดเอง']]
   return (
     <div className="filters">
       <div className="chips" role="group" aria-label="ช่วงเวลา">
@@ -18,6 +19,7 @@ export function FilterBar({ rangeKey, setRangeKey, custom, setCustom, latest, mu
             disabled={k !== 'day' && !multiDay} title={k !== 'day' && !multiDay ? 'ใช้ได้เมื่อมีข้อมูลหลายวัน' : undefined}
             onClick={() => setRangeKey(k)}>{label}</button>
         ))}
+        <DaySelect days={days} value={rangeKey === 'day' ? selectedDay : ''} onChange={setDay} />
         {rangeKey === 'custom' && (
           <span className="custom-range">
             <input type="date" aria-label="ตั้งแต่" value={custom.from} max={latest}

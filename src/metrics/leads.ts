@@ -6,26 +6,43 @@ import type { DateRange } from './range'
 export type Grade = 'A' | 'B' | 'C' | 'D'
 
 export const GRADES: { grade: Grade; label: string; hint: string }[] = [
-  { grade: 'A', label: 'A ร้อน', hint: 'พร้อมสั่ง · คุย 4 ข้อความขึ้นไป · กลับมาทักอีกวัน' },
-  { grade: 'B', label: 'B อุ่น', hint: 'ขอโปร/ถามสุขภาพ · พิมพ์คุยเองมากกว่า 1 ข้อความ' },
-  { grade: 'C', label: 'C เย็น', hint: 'กดปุ่มหรือส่งข้อความเดียวแล้วเงียบ' },
-  { grade: 'D', label: 'D ไม่ใช่ลีด', hint: 'ไม่สนใจ · ทักมั่ว · ทักซ้ำไม่ซื้อ' },
+  { grade: 'A', label: 'A ร้อน', hint: 'มีสัญญาณคุยต่อเนื่องหรือพร้อมสั่ง: ติดแท็กพร้อมสั่ง มีอย่างน้อย 4 ข้อความ หรือพบแชทอย่างน้อย 2 วัน เข้าเพียงข้อเดียวก็เป็น A' },
+  { grade: 'B', label: 'B อุ่น', hint: 'เริ่มสอบถามรายละเอียด: มีแท็กขอโปร/ถามสุขภาพ หรือเริ่มด้วยข้อความ/รูปและมีอย่างน้อย 2 ข้อความ โดยยังไม่เข้า A และไม่มีแท็กตัดออก D' },
+  { grade: 'C', label: 'C เย็น', hint: 'ข้อมูลการคุยยังน้อย: ยังไม่เข้า A หรือ B และไม่มีแท็กตัดออก D เช่น ส่งข้อความเดียว หรือเริ่มจากปุ่มแล้วคุยไม่ถึง 4 ข้อความ' },
+  { grade: 'D', label: 'D ไม่ใช่ลีด', hint: 'มีแท็กไม่สนใจ ทักมั่ว หรือทักซ้ำไม่ซื้อ และยังไม่เข้าเกณฑ์ A' },
 ]
 
 export type Lead = {
   conversationId: string; pageId: PageId; startDay: string; lastDay: string; isNew: boolean
-  tags: string[]; msgs: number; days: number; phone: boolean; typedFirst: boolean; closed: boolean; ads: string[]
+  tags: string[]; topics: string[]; msgs: number; days: number; phone: boolean; typedFirst: boolean; closed: boolean; ads: string[]
 }
 
 const OLD = '8.ลูกค้าเก่า'
 
 // behaviour only: close tags, phone, ปลายทาง and โอน are outcomes and never decide a grade (spec §3)
-export function gradeOf(l: Pick<Lead, 'tags' | 'msgs' | 'days' | 'typedFirst'>): Grade {
+export function explainGrade(l: Pick<Lead, 'tags' | 'msgs' | 'days' | 'typedFirst'>): { grade: Grade; reasons: string[] } {
   const pre = (p: string) => l.tags.some(t => t.startsWith(p))
-  if (pre('5.') || l.msgs >= 4 || l.days >= 2) return 'A'
-  if (l.tags.includes('ไม่สนใจ') || pre('9.') || l.tags.includes('ทักซ้ำไม่ซื้อ')) return 'D'
-  if (pre('3.') || pre('4.') || (l.typedFirst && l.msgs >= 2)) return 'B'
-  return 'C'
+  const matched = (rules: [boolean, string][]) => rules.filter(([yes]) => yes).map(([, reason]) => reason)
+  const a = matched([[pre('5.'), 'มีแท็กพร้อมสั่ง (5.)'], [l.msgs >= 4, 'มีข้อความอย่างน้อย 4 ข้อความ'], [l.days >= 2, 'พบแชทอย่างน้อย 2 วัน']])
+  if (a.length) return { grade: 'A', reasons: a }
+  const d = matched([[l.tags.includes('ไม่สนใจ'), 'มีแท็กไม่สนใจ'], [pre('9.'), 'มีแท็กทักมั่ว (9.)'], [l.tags.includes('ทักซ้ำไม่ซื้อ'), 'มีแท็กทักซ้ำไม่ซื้อ']])
+  if (d.length) return { grade: 'D', reasons: d }
+  const b = matched([[pre('3.'), 'มีแท็กขอโปรโมชั่น (3.)'], [pre('4.'), 'มีแท็กถามสุขภาพ (4.)'], [l.typedFirst && l.msgs >= 2, 'เริ่มด้วยข้อความ/รูป และมีอย่างน้อย 2 ข้อความ']])
+  if (b.length) return { grade: 'B', reasons: b }
+  return { grade: 'C', reasons: [l.typedFirst ? 'เริ่มด้วยข้อความ/รูป มีเพียง 1 ข้อความ' : `เริ่มจากปุ่ม มี ${l.msgs} ข้อความ`] }
+}
+
+export const gradeOf = (l: Pick<Lead, 'tags' | 'msgs' | 'days' | 'typedFirst'>): Grade => explainGrade(l).grade
+
+// Count only reasons that actually assigned this grade; do not show losing rules from another grade.
+export function gradeReasonCounts(leads: Lead[], grade: Grade): [string, number][] {
+  const counts = new Map<string, number>()
+  for (const lead of leads) {
+    const result = explainGrade(lead)
+    if (result.grade !== grade) continue
+    for (const reason of result.reasons) counts.set(reason, (counts.get(reason) ?? 0) + 1)
+  }
+  return [...counts].sort((a, b) => b[1] - a[1])
 }
 
 // one lead per chat; tags are the union over every export, so a tag removed later still counts
@@ -43,6 +60,7 @@ export function toLeads(rows: ConvRow[]): Lead[] {
       lastDay: rs[rs.length - 1].day,
       isNew: first.tags.some(t => isDateTagOf(t, first.day)) && !tags.includes(OLD),
       tags,
+      topics: [...new Set(rs.flatMap(r => r.topics ?? []))],
       msgs: rs.reduce((s, r) => s + r.msgCount, 0),
       days: new Set(rs.map(r => r.day)).size,
       phone: rs.some(r => r.hasPhone),
