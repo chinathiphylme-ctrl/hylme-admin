@@ -11,6 +11,7 @@ import type { ConvRow, OrderRow, TagRow } from '../parse/types'
 import { FilterBar } from './FilterBar'
 import { Follow } from './Follow'
 import { Overview } from './Overview'
+import { Ads } from './Ads'
 import { Quotes } from './Quotes'
 import { Sidebar, TITLES, type Tab } from './Sidebar'
 import { Tags } from './Tags'
@@ -71,6 +72,12 @@ export function App() {
   const unassigned = useMemo(
     () => (base?.allTags ?? []).filter(t => groupOf(t.tag, base!.overrides) === 'ยังไม่จัดกลุ่ม').length, [base])
 
+  // one day has too few chats to judge an ad, so the ads tab opens on 30 days
+  const goTab = (t: Tab) => {
+    if (t === 'ads' && rangeKey === 'day') setRangeKey('30d')
+    setTab(t)
+  }
+
   const pickRange = (k: RangeKey) => {
     setRangeKey(k)
     if (k === 'custom' && !custom && latest) setCustom({ from: addDays(latest, -6), to: latest })
@@ -91,6 +98,10 @@ export function App() {
     body = <UploadScreen uploads={base.uploads} overrides={base.overrides} onSaved={reload} goTags={() => setTab('tags')} />
   } else if (tab === 'tags') {
     body = <Tags tags={base.allTags} overrides={base.overrides} adNames={base.adNames} onSaved={reload} />
+  } else if (tab === 'ads' && latest && range) {
+    // leads arrive with the range rows; until then show the loading state, not "no ads"
+    body = rows ? <Ads leads={leads} range={range} page={page} adNames={base.adNames} goTags={() => setTab('tags')} />
+      : <div className="grid g-200">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton" />)}</div>
   } else if (tab === 'quotes') {
     body = <Quotes />
   } else if (tab === 'follow') {
@@ -106,7 +117,7 @@ export function App() {
 
   return (
     <div className="shell">
-      <Sidebar tab={tab} setTab={setTab} followCount={follow.length} unassigned={unassigned} latest={latest} uploads={base?.uploads ?? []} />
+      <Sidebar tab={tab} setTab={goTab} followCount={follow.length} unassigned={unassigned} latest={latest} uploads={base?.uploads ?? []} />
       <main className="main">
         <header className="head">
           <div className="head-top">
@@ -115,7 +126,7 @@ export function App() {
               <h1>{TITLES[tab]}</h1>
             </div>
           </div>
-          {tab === 'overview' && latest && range && (
+          {(tab === 'overview' || tab === 'ads') && latest && range && (
             <FilterBar rangeKey={rangeKey} setRangeKey={pickRange} custom={custom ?? range} setCustom={setCustom}
               latest={latest} multiDay={(base?.days.length ?? 0) > 1} page={page} setPage={setPage} />
           )}
