@@ -24,7 +24,7 @@ export function LeadGrades({ leads, range, page }: { leads: Lead[]; range: DateR
         <p className="desc">แชทใหม่ {fmt(sel.length)} แชทที่เริ่มในช่วงนี้ จัดเกรดจากพฤติกรรมการคุย แล้วดูว่าแต่ละเกรดปิดได้กี่ %</p>
       </div>
       {sel.length === 0 ? (
-        <p className="desc" style={{ fontSize: 14 }}>ยังไม่มีไฟล์ข้อความของช่วงนี้</p>
+        <p className="desc" style={{ fontSize: 14 }}>ยังไม่มีแชทใหม่ในช่วงนี้ (หรือยังไม่ได้อัปโหลดไฟล์ข้อความ)</p>
       ) : (
         <div className="filter-cards">
           {GRADES.map(({ grade, label, hint }) => {

@@ -50,22 +50,11 @@ export async function fetchConvs(r: DateRange): Promise<ConvRow[]> {
   return rows.map(fromDbConv)
 }
 
-// every row from a day on, so a chat that started in the range keeps the rows it got after range.to
-export async function fetchConvsFrom(from: string): Promise<ConvRow[]> {
+// every export row of every chat; leads need each chat's whole history (about 2,100 rows on 11/11/2026)
+export async function fetchAllConvs(): Promise<ConvRow[]> {
   const rows = await all<DbConv>((a, b) =>
-    db().from('conversations').select(CONV_COLS).gte('day', from).order('day').order('conversation_id').range(a, b))
+    db().from('conversations').select(CONV_COLS).order('day').order('conversation_id').range(a, b))
   return rows.map(fromDbConv)
-}
-
-export async function fetchConvsByIds(ids: string[]): Promise<ConvRow[]> {
-  const out: ConvRow[] = []
-  for (let i = 0; i < ids.length; i += 200) {
-    const chunk = ids.slice(i, i + 200)
-    const rows = await all<DbConv>((a, b) =>
-      db().from('conversations').select(CONV_COLS).in('conversation_id', chunk).order('day').order('conversation_id').range(a, b))
-    out.push(...rows.map(fromDbConv))
-  }
-  return out
 }
 
 export async function fetchOrders(r: DateRange): Promise<OrderRow[]> {

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { PageId } from '../config/pages'
 import {
-  fetchAllTags, fetchConvs, fetchConvsByIds, fetchConvsFrom, fetchDays, fetchGroups, fetchLatestConvs, fetchOrders, fetchSeen, fetchTagRows, fetchUploads, type Upload,
+  fetchAllConvs, fetchAllTags, fetchConvs, fetchDays, fetchGroups, fetchLatestConvs, fetchOrders, fetchSeen, fetchTagRows, fetchUploads, type Upload,
 } from '../data/read'
 import { groupOf } from '../grouping/rules'
 import { followList, type Seen } from '../metrics/conversations'
-import { gradeOf, toLeads, type Grade, type Lead } from '../metrics/leads'
+import { gradeOf, toLeads, type Lead } from '../metrics/leads'
 import { addDays, rangeFor, type DateRange, type RangeKey } from '../metrics/range'
 import type { ConvRow, OrderRow, TagRow } from '../parse/types'
 import { FilterBar } from './FilterBar'
@@ -26,6 +26,7 @@ type Base = {
   seen: Seen[]
   uploads: Upload[]
   allTags: { tag: string; color: string; total: number }[]
+  leads: Lead[]
 }
 
 export function App() {
@@ -37,8 +38,6 @@ export function App() {
   const [rows, setRows] = useState<TagRow[] | null>(null)
   const [convs, setConvs] = useState<ConvRow[]>([])
   const [orders, setOrders] = useState<OrderRow[]>([])
-  const [leads, setLeads] = useState<Lead[]>([])
-  const [grades, setGrades] = useState<Map<string, Grade>>(new Map())
   const [error, setError] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
 
@@ -46,9 +45,11 @@ export function App() {
 
   useEffect(() => {
     let live = true
-    Promise.all([fetchDays(), fetchGroups(), fetchLatestConvs(), fetchSeen(), fetchUploads(), fetchAllTags()])
-      .then(([days, groups, latestConvs, seen, uploads, allTags]) => {
-        if (live) setBase({ days, ...groups, latestConvs, seen, uploads, allTags })
+    // leads need each chat's whole history: a chat's start and "new" status come from its first export ever,
+    // so they must not depend on the range being viewed
+    Promise.all([fetchDays(), fetchGroups(), fetchLatestConvs(), fetchSeen(), fetchUploads(), fetchAllTags(), fetchAllConvs()])
+      .then(([days, groups, latestConvs, seen, uploads, allTags, allConvs]) => {
+        if (live) setBase({ days, ...groups, latestConvs, seen, uploads, allTags, leads: toLeads(allConvs) })
       })
       .catch(e => live && setError(String(e.message ?? e)))
     return () => { live = false }
@@ -63,23 +64,17 @@ export function App() {
     setRows(null)
     // widen to 14 days so the trend chart has context even for a one-day view
     const widened = { from: range.from < addDays(range.to, -13) ? range.from : addDays(range.to, -13), to: range.to }
-    Promise.all([fetchTagRows(widened), fetchConvs(range), fetchOrders(range), fetchConvsFrom(range.from)])
-      .then(([r, c, o, l]) => { if (live) { setRows(r); setConvs(c); setOrders(o); setLeads(toLeads(l)) } })
+    Promise.all([fetchTagRows(widened), fetchConvs(range), fetchOrders(range)])
+      .then(([r, c, o]) => { if (live) { setRows(r); setConvs(c); setOrders(o) } })
       .catch(e => live && setError(String(e.message ?? e)))
     return () => { live = false }
   }, [range?.from, range?.to, version]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // follow-list grades use every export of those chats, not just the latest file
-  useEffect(() => {
-    if (!base?.latestConvs.length) return
-    let live = true
-    fetchConvsByIds([...new Set(base.latestConvs.map(c => c.conversationId))])
-      .then(rs => { if (live) setGrades(new Map(toLeads(rs).map(l => [l.conversationId, gradeOf(l)]))) })
-      .catch(() => { /* grades fall back to the latest row */ })
-    return () => { live = false }
+  const follow = useMemo(() => {
+    const grades = new Map((base?.leads ?? []).map(l => [l.conversationId, gradeOf(l)]))
+    return followList(base?.latestConvs ?? [], grades)
   }, [base])
-
-  const follow = useMemo(() => followList(base?.latestConvs ?? [], grades), [base, grades])
   const unassigned = useMemo(
     () => (base?.allTags ?? []).filter(t => groupOf(t.tag, base!.overrides) === 'ยังไม่จัดกลุ่ม').length, [base])
 
@@ -110,9 +105,8 @@ export function App() {
   } else if (tab === 'tags') {
     body = <Tags tags={base.allTags} overrides={base.overrides} adNames={base.adNames} onSaved={reload} />
   } else if (tab === 'ads' && latest && range) {
-    // leads arrive with the range rows; until then show the loading state, not "no ads"
-    body = rows ? <Ads leads={leads} range={range} page={page} adNames={base.adNames} goTags={() => setTab('tags')} />
-      : <div className="grid g-200">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton" />)}</div>
+    // leads load with base, so the ads tab is ready as soon as base is
+    body = <Ads leads={base.leads} range={range} page={page} adNames={base.adNames} goTags={() => setTab('tags')} />
   } else if (tab === 'quotes') {
     body = <Quotes />
   } else if (tab === 'follow') {
@@ -122,7 +116,7 @@ export function App() {
   } else if (!rows) {
     body = <div className="grid g-200">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton" />)}</div>
   } else {
-    body = <Overview rows={rows} convs={convs} orders={orders} leads={leads} seen={base.seen} range={range} page={page} setPage={setPage}
+    body = <Overview rows={rows} convs={convs} orders={orders} leads={base.leads} seen={base.seen} range={range} page={page} setPage={setPage}
       overrides={base.overrides} adNames={base.adNames} followCount={follow.length} goFollow={() => setTab('follow')} />
   }
 
