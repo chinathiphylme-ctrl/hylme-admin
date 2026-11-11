@@ -1,28 +1,13 @@
 import { pageName, type PageId } from '../config/pages'
-import { adScores, MIN_CHATS, VERDICTS, type AdScore, type Verdict } from '../metrics/ads'
+import { adScores, MIN_CHATS, type AdScore } from '../metrics/ads'
 import { inStart, type Lead } from '../metrics/leads'
 import type { DateRange } from '../metrics/range'
-import { ACCENT, CRIT, fmt, thaiDay } from './viewModel'
+import { fmt, thaiDay } from './viewModel'
 
-const VERDICT_STYLE: Record<Verdict, React.CSSProperties> = {
-  'ดี': { background: ACCENT, color: '#fff' },
-  'ไม่ดี': { background: CRIT, color: '#fff' },
-  'กลางๆ': { background: '#EDF2EF', color: '#24352C' },
-  'ข้อมูลยังน้อย': { background: '#F6F8F7', color: '#55665D' },
-}
-const VERDICT_HINT: Record<Verdict, string> = {
-  'ดี': 'ควรเก็บ/เพิ่มงบ',
-  'ไม่ดี': 'ควรพิจารณาตัด',
-  'กลางๆ': 'ยังไม่ต่างจากค่าเฉลี่ย',
-  'ข้อมูลยังน้อย': `แชทไม่ถึง ${MIN_CHATS}`,
-}
-
-function reason(a: AdScore, avg: number): string {
-  const base = `${fmt(a.chats)} แชท ปิดได้ ${fmt(a.closed)} · ค่าเฉลี่ย ${avg}%`
-  if (a.verdict === 'ดี') return `${base} · สูงกว่าค่าเฉลี่ยแบบที่ไม่น่าใช่ความบังเอิญ`
-  if (a.verdict === 'ไม่ดี') return `${base} · ต่ำกว่าค่าเฉลี่ยแบบที่ไม่น่าใช่ความบังเอิญ`
-  if (a.verdict === 'ข้อมูลยังน้อย') return `${base} · ต้องมีอย่างน้อย ${MIN_CHATS} แชทถึงจะตัดสิน`
-  return base
+// numbers only, no verdicts: marketing decides what to keep or cut (user, 11/11)
+const vsAvg = (rate: number, avg: number) => {
+  const d = Math.round((rate - avg) * 10) / 10
+  return d === 0 ? 'เท่าค่าเฉลี่ย' : `${d > 0 ? '+' : '−'}${Math.abs(d)} จุด`
 }
 
 function AdRows({ ads, avg }: { ads: AdScore[]; avg: number }) {
@@ -32,7 +17,7 @@ function AdRows({ ads, avg }: { ads: AdScore[]; avg: number }) {
         <thead>
           <tr>
             <th>#</th><th>โฆษณา</th><th style={{ textAlign: 'right' }}>แชทใหม่</th><th style={{ textAlign: 'right' }}>ลีด A+B</th>
-            <th style={{ textAlign: 'right' }}>ปิด</th><th style={{ textAlign: 'right' }}>อัตราปิด</th><th>คำตัดสิน</th><th>เพจ</th><th>เห็นช่วง</th>
+            <th style={{ textAlign: 'right' }}>ปิด</th><th style={{ textAlign: 'right' }}>อัตราปิด</th><th style={{ textAlign: 'right' }}>เทียบค่าเฉลี่ย</th><th>เพจ</th><th>เห็นช่วง</th>
           </tr>
         </thead>
         <tbody>
@@ -47,10 +32,7 @@ function AdRows({ ads, avg }: { ads: AdScore[]; avg: number }) {
               <td className="num" style={{ textAlign: 'right' }}>{fmt(a.good)} <span className="small">({Math.round((a.good / a.chats) * 100)}%)</span></td>
               <td className="num" style={{ textAlign: 'right' }}>{fmt(a.closed)}</td>
               <td className="num" style={{ textAlign: 'right' }}>{a.rate}%</td>
-              <td>
-                <span className="tag-pill" style={VERDICT_STYLE[a.verdict]}>{a.verdict}</span>
-                <div className="small" style={{ marginTop: 4, maxWidth: 260 }}>{reason(a, avg)}</div>
-              </td>
+              <td className="num" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{vsAvg(a.rate, avg)}</td>
               <td className="small">{a.pages.map(pageName).join(', ')}</td>
               <td className="small" style={{ whiteSpace: 'nowrap' }}>{thaiDay(a.firstDay)}–{thaiDay(a.lastDay)}</td>
             </tr>
@@ -65,13 +47,13 @@ export function Ads({ leads, range, page, adNames, goTags }: {
   leads: Lead[]; range: DateRange; page: PageId | 'all'; adNames: Record<string, string>; goTags: () => void
 }) {
   const { avg, adChats, ads } = adScores(leads.filter(inStart(range)), adNames, page)
-  const judged = ads.filter(a => a.verdict !== 'ข้อมูลยังน้อย')
-  const thin = ads.filter(a => a.verdict === 'ข้อมูลยังน้อย')
+  const ranked = ads.filter(a => a.rank != null)
+  const thin = ads.filter(a => a.rank == null)
 
   return (
     <section className="stack" style={{ gap: 16 }}>
       <p style={{ fontSize: 15, color: '#24352C', maxWidth: '72ch' }}>
-        โฆษณาแต่ละตัวพาแชทใหม่มากี่แชท ปิดได้กี่แชท และเทียบกับค่าเฉลี่ยของโฆษณาทั้งหมด เพื่อดูว่าตัวไหนควรเก็บ ตัวไหนควรตัด
+        โฆษณาแต่ละตัวพาแชทใหม่มากี่แชท เป็นลีด A/B กี่แชท ปิดได้กี่แชท เทียบกับค่าเฉลี่ยของโฆษณาทั้งหมด ใช้ประกอบการตัดสินใจเรื่องงบโฆษณา
       </p>
 
       {avg == null ? (
@@ -80,24 +62,15 @@ export function Ads({ leads, range, page, adNames, goTags }: {
         </section>
       ) : (
         <>
-          <div className="filter-cards">
-            {VERDICTS.map(v => (
-              <div key={v} className="fcard" style={{ cursor: 'default' }}>
-                <span className="tag-pill" style={{ ...VERDICT_STYLE[v], alignSelf: 'flex-start' }}>{v}</span>
-                <span className="n">{fmt(ads.filter(a => a.verdict === v).length)}</span>
-                <span className="small">{VERDICT_HINT[v]}</span>
-              </div>
-            ))}
-          </div>
           <p className="desc">ค่าเฉลี่ยโฆษณา {avg}% จาก {fmt(adChats)} แชทใหม่ที่มีแท็กโฆษณา</p>
-          <p className="small">อันดับจากดีสุดไปแย่สุด ใช้ขอบล่าง Wilson 90% เพื่อหักความไม่แน่นอน ถ้าคะแนนเท่ากันให้แชทมากกว่าอยู่ก่อน · จัดอันดับเมื่อมีอย่างน้อย {MIN_CHATS} แชท</p>
+          <p className="small">เรียงตามอัตราปิดที่หักความไม่แน่นอนจากจำนวนแชทแล้ว (ขอบล่าง Wilson 90%) โฆษณาที่แชทน้อยแต่บังเอิญปิดได้สูงจะไม่ขึ้นไปอยู่บนสุด · เรียงเมื่อมีอย่างน้อย {MIN_CHATS} แชท</p>
 
-          {judged.length > 0 ? <AdRows ads={judged} avg={avg} /> : (
+          {ranked.length > 0 ? <AdRows ads={ranked} avg={avg} /> : (
             <p className="desc" style={{ fontSize: 14 }}>ยังไม่มีโฆษณาตัวไหนที่มีแชทถึง {MIN_CHATS} แชท ลองเลือกช่วงเวลาที่ยาวขึ้น</p>
           )}
           {thin.length > 0 && (
             <details>
-              <summary style={{ cursor: 'pointer', fontSize: 14, color: '#24352C' }}>อีก {fmt(thin.length)} ตัวที่ข้อมูลยังน้อย</summary>
+              <summary style={{ cursor: 'pointer', fontSize: 14, color: '#24352C' }}>อีก {fmt(thin.length)} ตัวที่แชทยังไม่ถึง {MIN_CHATS} (ยังไม่เรียงลำดับ)</summary>
               <div style={{ marginTop: 10 }}><AdRows ads={thin} avg={avg} /></div>
             </details>
           )}
