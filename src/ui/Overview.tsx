@@ -1,9 +1,11 @@
 import { PAGES, pageName, type PageId } from '../config/pages'
 import { convStats, segmentRates, type Seen } from '../metrics/conversations'
 import { pageCompare, stuckRanking, summarize, trend } from '../metrics/daily'
+import type { Lead } from '../metrics/leads'
 import { orderStats } from '../metrics/orders'
 import { addDays, daysIn, previousRange, type DateRange } from '../metrics/range'
 import type { ConvRow, OrderRow, TagRow } from '../parse/types'
+import { LeadGrades } from './LeadGrades'
 import { Bar, BarList, HourBars, peakHours, Ring, StackedBar, TrendBars } from './charts'
 import { ACCENT, buildInsights, CRIT, deltaText, fixList, fmt, rangeLabel, rateColor, thaiDay } from './viewModel'
 
@@ -27,8 +29,8 @@ function pagesLabel(convs: ConvRow[]): string {
   return PAGES.filter(p => ids.has(p.id)).map(p => p.name).join(', ')
 }
 
-export function Overview({ rows, convs, orders, seen, range, page, setPage, overrides, adNames, followCount, goFollow }: {
-  rows: TagRow[]; convs: ConvRow[]; orders: OrderRow[]; seen: Seen[]; range: DateRange; page: PageId | 'all'; setPage: (p: PageId | 'all') => void
+export function Overview({ rows, convs, orders, leads, seen, range, page, setPage, overrides, adNames, followCount, goFollow }: {
+  rows: TagRow[]; convs: ConvRow[]; orders: OrderRow[]; leads: Lead[]; seen: Seen[]; range: DateRange; page: PageId | 'all'; setPage: (p: PageId | 'all') => void
   overrides: Record<string, string>; adNames: Record<string, string>; followCount: number; goFollow: () => void
 }) {
   const s = summarize(rows, overrides, range, page)
@@ -128,6 +130,8 @@ export function Overview({ rows, convs, orders, seen, range, page, setPage, over
           </div>
         ))}
       </section>
+
+      <LeadGrades leads={leads} range={range} page={page} />
 
       <section className="card" style={{ gap: 14 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '6px 16px' }}>

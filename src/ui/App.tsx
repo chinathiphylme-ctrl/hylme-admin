@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { PageId } from '../config/pages'
 import {
-  fetchAllTags, fetchConvs, fetchDays, fetchGroups, fetchLatestConvs, fetchOrders, fetchSeen, fetchTagRows, fetchUploads, type Upload,
+  fetchAllTags, fetchConvs, fetchConvsFrom, fetchDays, fetchGroups, fetchLatestConvs, fetchOrders, fetchSeen, fetchTagRows, fetchUploads, type Upload,
 } from '../data/read'
 import { groupOf } from '../grouping/rules'
 import { followList, type Seen } from '../metrics/conversations'
+import { toLeads, type Lead } from '../metrics/leads'
 import { addDays, rangeFor, type DateRange, type RangeKey } from '../metrics/range'
 import type { ConvRow, OrderRow, TagRow } from '../parse/types'
 import { FilterBar } from './FilterBar'
@@ -35,6 +36,7 @@ export function App() {
   const [rows, setRows] = useState<TagRow[] | null>(null)
   const [convs, setConvs] = useState<ConvRow[]>([])
   const [orders, setOrders] = useState<OrderRow[]>([])
+  const [leads, setLeads] = useState<Lead[]>([])
   const [error, setError] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
 
@@ -59,8 +61,8 @@ export function App() {
     setRows(null)
     // widen to 14 days so the trend chart has context even for a one-day view
     const widened = { from: range.from < addDays(range.to, -13) ? range.from : addDays(range.to, -13), to: range.to }
-    Promise.all([fetchTagRows(widened), fetchConvs(range), fetchOrders(range)])
-      .then(([r, c, o]) => { if (live) { setRows(r); setConvs(c); setOrders(o) } })
+    Promise.all([fetchTagRows(widened), fetchConvs(range), fetchOrders(range), fetchConvsFrom(range.from)])
+      .then(([r, c, o, l]) => { if (live) { setRows(r); setConvs(c); setOrders(o); setLeads(toLeads(l)) } })
       .catch(e => live && setError(String(e.message ?? e)))
     return () => { live = false }
   }, [range?.from, range?.to, version]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -98,7 +100,7 @@ export function App() {
   } else if (!rows) {
     body = <div className="grid g-200">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton" />)}</div>
   } else {
-    body = <Overview rows={rows} convs={convs} orders={orders} seen={base.seen} range={range} page={page} setPage={setPage}
+    body = <Overview rows={rows} convs={convs} orders={orders} leads={leads} seen={base.seen} range={range} page={page} setPage={setPage}
       overrides={base.overrides} adNames={base.adNames} followCount={follow.length} goFollow={() => setTab('follow')} />
   }
 
