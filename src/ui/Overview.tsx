@@ -1,7 +1,7 @@
 import { PAGES, pageName, type PageId } from '../config/pages'
 import { convStats, segmentRates, type Seen } from '../metrics/conversations'
 import { pageCompare, stuckRanking, summarize, trend } from '../metrics/daily'
-import type { Lead } from '../metrics/leads'
+import { newChatCloses, type Lead } from '../metrics/leads'
 import { orderStats } from '../metrics/orders'
 import { addDays, daysIn, previousRange, type DateRange } from '../metrics/range'
 import type { ConvRow, OrderRow, TagRow } from '../parse/types'
@@ -54,7 +54,8 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
     convNew: cs.mix[0][1],
     closedNew: cs.closedNew,
     convLabel: pagesLabel(cv),
-    pages: page === 'all' ? pages.map(x => ({ name: pageName(x.pageId), newChats: x.newChats, closed: x.closed, old: x.sources[0][1] })) : [],
+    // new-chat closes only, so returning customers no longer explain a gap between pages (old: 0)
+    pages: page === 'all' ? pages.map(x => ({ name: pageName(x.pageId), ...newChatCloses(leads, range, x.pageId), old: 0 })) : [],
   })
   const seg = segmentRates(pageConvs, seen, range)
   const os = orderStats(orders, page)
@@ -67,10 +68,13 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
   const cl = s.closedSplit
   const closedNote = `Ads ${fmt(cl.ads)} · Organic ${fmt(cl.organic)}` + (cl.unspecified ? ` · ไม่ระบุ ${fmt(cl.unspecified)}` : '')
     + (s.closedRemoved ? ` · หักแท็กปิดที่ถูกถอด/เปลี่ยน ${fmt(s.closedRemoved)}` : '')
+  // the rate counts new chats only; everything else that closed is shown beside it, never divided
+  const nc = newChatCloses(leads, range, page)
+  const otherClosed = Math.max(0, s.closed - nc.closed)
 
   const kpis = [
     { label: 'แชทใหม่', value: s.newChats, before: p.newChats, note: 'แท็กวันที่ของแต่ละวัน', dot: '#7FA894' },
-    { label: 'ปิดการขาย', value: s.closed, before: p.closed, note: closedNote, dot: ACCENT },
+    { label: 'ปิดการขาย', value: s.closed, before: p.closed, note: `${closedNote} · จากแชทใหม่ ${fmt(nc.closed)} · ลูกค้าเก่า/แชทอื่น ${fmt(otherClosed)}`, dot: ACCENT },
     { label: 'พร้อมสั่ง', value: s.ready, before: p.ready, note: 'แท็ก 5.พร้อมสั่ง', dot: '#D99A2B' },
     { label: 'รอตามต่อ', value: s.pending, before: p.pending, note: 'ไม่เปิดอ่าน + อ่านไม่ตอบ', dot: CRIT },
   ]
@@ -108,14 +112,14 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
           <p>{summary}</p>
         </div>
         <div className="hero-side">
-          <Ring rate={s.rate} size={148} width={14} color="#7FD3A8" track="#2A4A3D">
-            <span className="num" style={{ fontSize: 32, fontWeight: 600, lineHeight: 1.1 }}>{s.rate == null ? '—' : `${s.rate}%`}</span>
-            <span style={{ fontSize: 12, color: '#B5C8BD' }}>อัตราปิด</span>
+          <Ring rate={nc.rate} size={148} width={14} color="#7FD3A8" track="#2A4A3D">
+            <span className="num" style={{ fontSize: 32, fontWeight: 600, lineHeight: 1.1 }}>{nc.rate == null ? '—' : `${nc.rate}%`}</span>
+            <span style={{ fontSize: 12, color: '#B5C8BD' }}>อัตราปิดแชทใหม่</span>
           </Ring>
           <div className="note">
-            <span><b>{fmt(s.closed)}</b> ปิด จาก <b>{fmt(s.newChats)}</b> แชทใหม่</span>
-            <small>{closedNote}</small>
-            <small>นับแท็ก “ปิดAds” + “ปิดOrganic” + “ปิด” (แบบเก่า ไม่ระบุที่มา) ÷ แชทใหม่ รวมลูกค้าเก่าที่กลับมาซื้อด้วย</small>
+            <span>แชทใหม่ปิดได้ <b>{fmt(nc.closed)}</b> จาก <b>{fmt(nc.newChats)}</b> แชท</span>
+            <small>ปิดทั้งหมด {fmt(s.closed)} ({closedNote}) · ลูกค้าเก่าซื้อซ้ำหรือแชทอื่น {fmt(otherClosed)}</small>
+            <small>อัตราปิดนับจากไฟล์ข้อความ เฉพาะแชทใหม่ที่เริ่มในช่วงนี้และปิดได้ ลูกค้าเก่าที่กลับมาซื้อแยกไว้ ไม่เอามาหาร</small>
           </div>
         </div>
       </section>
@@ -246,7 +250,8 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
             const on = x.pageId === page
             const st = stuckRanking(x)[0]
             const empty = !x.newChats
-            const color = rateColor(x.rate)
+            const pc = newChatCloses(leads, range, x.pageId)
+            const color = rateColor(pc.rate)
             return (
               <button key={x.pageId} type="button" aria-pressed={on} className={`pagecard${empty && !on ? ' empty' : ''}`} onClick={() => setPage(on ? 'all' : x.pageId)}>
                 <span className="top">
@@ -255,12 +260,12 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
                 </span>
                 <span style={{ fontWeight: 600, fontSize: 16 }}>{pageName(x.pageId)}</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%' }}>
-                  <Ring rate={x.rate} size={72} width={8} color={color} track="#E8EEEA">
-                    <span className="num" style={{ fontWeight: 600, fontSize: 15, color }}>{x.rate == null ? '—' : `${x.rate}%`}</span>
+                  <Ring rate={pc.rate} size={72} width={8} color={color} track="#E8EEEA">
+                    <span className="num" style={{ fontWeight: 600, fontSize: 15, color }}>{pc.rate == null ? '—' : `${pc.rate}%`}</span>
                   </Ring>
                   <span className="stats">
-                    <span>แชทใหม่</span><b>{fmt(x.newChats)}</b>
-                    <span>ปิด</span><b>{fmt(x.closed)}</b>
+                    <span>แชทใหม่ปิด</span><b>{fmt(pc.closed)}/{fmt(pc.newChats)}</b>
+                    <span>ปิดทั้งหมด</span><b>{fmt(x.closed)}</b>
                     <span>รอตามต่อ</span><b>{fmt(x.pending)}</b>
                   </span>
                 </span>

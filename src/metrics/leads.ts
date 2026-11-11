@@ -55,6 +55,14 @@ export function toLeads(rows: ConvRow[]): Lead[] {
 
 export const inStart = (r: DateRange) => (l: Lead) => l.startDay >= r.from && l.startDay <= r.to
 
+// close rate of new chats only: returning customers who buy are left out of both sides,
+// so a small page can't show 200% (tag stats count every close but only new chats' date tags)
+export function newChatCloses(leads: Lead[], range: DateRange, page: PageId | 'all'): { newChats: number; closed: number; rate: number | null } {
+  const sel = leads.filter(inStart(range)).filter(l => l.isNew && (page === 'all' || l.pageId === page))
+  const closed = sel.filter(l => l.closed).length
+  return { newChats: sel.length, closed, rate: sel.length ? Math.round((closed / sel.length) * 1000) / 10 : null }
+}
+
 export function gradeStats(leads: Lead[]): { grade: Grade; chats: number; closed: number; rate: number | null }[] {
   return GRADES.map(({ grade }) => {
     const xs = leads.filter(l => gradeOf(l) === grade)

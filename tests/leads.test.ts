@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isAdTag } from '../src/grouping/rules'
-import { gradeOf, gradeStats, inStart, toLeads, type Lead } from '../src/metrics/leads'
+import { gradeOf, gradeStats, inStart, newChatCloses, toLeads, type Lead } from '../src/metrics/leads'
 import type { ConvRow } from '../src/parse/types'
 
 const row = (conversationId: string, day: string, tags: string[], over: Partial<ConvRow> = {}): ConvRow => ({
@@ -69,5 +69,25 @@ describe('isAdTag', () => {
     expect(isAdTag('120250984880940')).toBe(true)
     expect(isAdTag('29/10')).toBe(false)
     expect(isAdTag('12345')).toBe(false)
+  })
+})
+
+describe('newChatCloses', () => {
+  const NON = '923678677500634'
+  // real 10/11 shape on ครบจบเรื่องนอน: 1 new chat not closed, 2 returning customers closed as ปิดOrganic
+  const rows = [
+    row('new', '2026-11-10', ['10/11', '3. ขอโปรโมชั่น', 'อ่านไม่ตอบ'], { pageId: NON }),
+    row('old1', '2026-11-08', ['9/11', '8.ลูกค้าเก่า'], { pageId: NON }),
+    row('old1', '2026-11-10', ['9/11', '8.ลูกค้าเก่า', 'ปิดOrganic'], { pageId: NON }),
+    row('old2', '2026-11-10', ['ปิดOrganic', '8.ลูกค้าเก่า'], { pageId: NON }),
+    row('fb', '2026-11-10', ['10/11', 'ปิดAds']),
+  ]
+  const D10 = { from: '2026-11-10', to: '2026-11-10' }
+  it('rates only new chats, never above 100%', () => {
+    expect(newChatCloses(toLeads(rows), D10, NON)).toEqual({ newChats: 1, closed: 0, rate: 0 })
+  })
+  it('sums pages for all and gives null without new chats', () => {
+    expect(newChatCloses(toLeads(rows), D10, 'all')).toEqual({ newChats: 2, closed: 1, rate: 50 })
+    expect(newChatCloses(toLeads(rows), { from: '2026-11-01', to: '2026-11-01' }, 'all')).toEqual({ newChats: 0, closed: 0, rate: null })
   })
 })
