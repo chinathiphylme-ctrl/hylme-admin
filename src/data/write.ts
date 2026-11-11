@@ -22,3 +22,8 @@ export const saveTagGroup = (code: string, tag: string, grp: string, adName: str
 
 export const saveOrders = (code: string, fileName: string, orders: OrderRow[]) =>
   rpc<number>('save_orders', { p_code: code, p_file: fileName, p_orders: orders.map(toDbOrder) })
+
+export const addQuote = (code: string, q: { day: string; pageId: string; category: string; quote: string; note: string }) =>
+  rpc<number>('add_quote', { p_code: code, p_day: q.day, p_page: q.pageId, p_category: q.category, p_quote: q.quote, p_note: q.note })
+
+export const deleteQuote = (code: string, id: number) => rpc<void>('delete_quote', { p_code: code, p_id: id })

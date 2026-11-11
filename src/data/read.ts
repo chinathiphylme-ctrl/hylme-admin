@@ -1,6 +1,7 @@
 import { PAGES, type PageId } from '../config/pages'
 import { CLOSE_TAGS } from '../grouping/rules'
 import type { Seen } from '../metrics/conversations'
+import type { Quote, QuoteCategory } from '../metrics/quotes'
 import { previousRange, type DateRange } from '../metrics/range'
 import type { ConvRow, OrderRow, TagRow } from '../parse/types'
 import { db } from './client'
@@ -89,6 +90,15 @@ export async function fetchGroups(): Promise<{ overrides: Record<string, string>
     if (r.ad_name) adNames[r.tag] = r.ad_name
   }
   return { overrides, adNames }
+}
+
+export async function fetchQuotes(): Promise<Quote[]> {
+  const rows = await all<{ id: number; created_at: string; day: string; page_id: string; category: string; quote: string; note: string }>((a, b) =>
+    db().from('customer_quotes').select('id,created_at,day,page_id,category,quote,note').order('id').range(a, b))
+  return rows.map(r => ({
+    id: r.id, createdAt: r.created_at, day: r.day, pageId: r.page_id as PageId,
+    category: r.category as QuoteCategory, quote: r.quote, note: r.note,
+  }))
 }
 
 export type Upload = { uploadedAt: string; kind: 'tagStats' | 'messages' | 'orders'; fileName: string; dayFrom: string | null; dayTo: string | null; pageIds: PageId[]; rows: number }

@@ -2,13 +2,14 @@ import { toBangkokIsoFromAny } from '../data/mappers'
 import type { Upload } from '../data/read'
 import { thaiDay } from './viewModel'
 
-export type Tab = 'overview' | 'follow' | 'upload' | 'tags'
+export type Tab = 'overview' | 'follow' | 'quotes' | 'upload' | 'tags'
 
-export const TITLES: Record<Tab, string> = { overview: 'สรุปประจำวัน', follow: 'ต้องตามวันนี้', upload: 'อัปโหลดไฟล์', tags: 'จัดกลุ่มแท็ก' }
+export const TITLES: Record<Tab, string> = { overview: 'สรุปประจำวัน', follow: 'ต้องตามวันนี้', quotes: 'เสียงลูกค้า', upload: 'อัปโหลดไฟล์', tags: 'จัดกลุ่มแท็ก' }
 
 const ICONS: Record<Tab, React.ReactNode> = {
   overview: <><rect x="3.5" y="3.5" width="7" height="9" rx="1.5" /><rect x="13.5" y="3.5" width="7" height="5" rx="1.5" /><rect x="13.5" y="11.5" width="7" height="9" rx="1.5" /><rect x="3.5" y="15.5" width="7" height="5" rx="1.5" /></>,
   follow: <><path d="M21 12a8.5 8.5 0 0 1-12.4 7.6L3.5 21l1.4-4.9A8.5 8.5 0 1 1 21 12z" /><path d="M12 8v4l2.5 1.5" /></>,
+  quotes: <><path d="M4.5 5.5h15a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-9l-4.5 3.5v-3.5h-1.5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1z" /><path d="M8.5 10h7" /><path d="M8.5 13h4" /></>,
   upload: <><path d="M12 15V4" /><path d="M7.5 8.5 12 4l4.5 4.5" /><path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15" /></>,
   tags: <><path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1 1 0 0 1 0 1.4l-7.3 7.3a1 1 0 0 1-1.4 0z" /><circle cx="8" cy="8" r="1.3" /></>,
 }
@@ -46,6 +47,7 @@ export function Sidebar({ tab, setTab, followCount, unassigned, latest, uploads 
       <nav className="nav" aria-label="เมนูหลัก">
         {item('overview')}
         {item('follow', followCount > 0 && <span className="pill-count" style={{ background: '#F2C9B3', color: '#6E260A' }}>{followCount}</span>)}
+        {item('quotes')}
         {item('upload')}
         {item('tags', unassigned > 0 && <span className="pill-count" style={{ background: '#F3DDAE', color: '#5C3A06' }}>{unassigned}</span>)}
       </nav>

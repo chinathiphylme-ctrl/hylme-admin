@@ -10,6 +10,7 @@ import type { ConvRow, OrderRow, TagRow } from '../parse/types'
 import { FilterBar } from './FilterBar'
 import { Follow } from './Follow'
 import { Overview } from './Overview'
+import { Quotes } from './Quotes'
 import { Sidebar, TITLES, type Tab } from './Sidebar'
 import { Tags } from './Tags'
 import { Upload as UploadScreen } from './Upload'
@@ -88,6 +89,8 @@ export function App() {
     body = <UploadScreen uploads={base.uploads} overrides={base.overrides} onSaved={reload} goTags={() => setTab('tags')} />
   } else if (tab === 'tags') {
     body = <Tags tags={base.allTags} overrides={base.overrides} adNames={base.adNames} onSaved={reload} />
+  } else if (tab === 'quotes') {
+    body = <Quotes />
   } else if (tab === 'follow') {
     body = <Follow items={follow} />
   } else if (!latest || !range) {

@@ -166,7 +166,7 @@ td { padding: 10px 14px; border-bottom: 1px solid #EEF2EF; vertical-align: middl
 .ok-pill { font-size: 12px; font-weight: 600; color: #185A3B; background: #DDF0E4; border-radius: 999px; padding: 1px 10px; }
 .err-pill { font-size: 12px; font-weight: 600; color: #8A2E07; background: #FCE6DA; border-radius: 999px; padding: 1px 10px; }
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #435349; flex: 1 1 200px; }
-.field input { min-height: 44px; padding: 8px 12px; border: 1px solid #C9D5CE; border-radius: 10px; font: inherit; font-size: 15px; }
+.field input, .field select, .field textarea { min-height: 44px; padding: 8px 12px; border: 1px solid #C9D5CE; border-radius: 10px; font: inherit; font-size: 15px; }
 .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; font-size: 12px; text-align: center; }
 .cal .wd { color: var(--muted2); font-weight: 600; padding: 4px 0; }
 .cal .d { min-height: 44px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-family: var(--num); background: #F6F8F7; }
@@ -188,3 +188,8 @@ td { padding: 10px 14px; border-bottom: 1px solid #EEF2EF; vertical-align: middl
   .jline { grid-template-columns: 24px minmax(70px, 110px) minmax(30px, 1fr) 40px 36px; gap: 8px; }
   .brow { grid-template-columns: 90px minmax(0, 1fr) 40px; }
 }
+.field textarea { resize: vertical; line-height: 1.5; }
+.quote { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.quote blockquote { margin: 0; font-size: 15px; color: #12241B; overflow-wrap: anywhere; white-space: pre-wrap; }
+.quote .meta { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 12px; color: var(--muted2); }
+.tag-pill { font-size: 12px; font-weight: 600; color: #24352C; background: #EDF2EF; border-radius: 999px; padding: 1px 10px; }
