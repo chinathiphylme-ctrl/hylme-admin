@@ -18,7 +18,7 @@ export function Gate({ fu }: { fu: Followup }) {
     return (
       <section className="card login">
         <h2>บัญชีนี้ยังไม่มีสิทธิ์ใช้ระบบติดตาม</h2>
-        <p className="desc">เข้าสู่ระบบด้วยบัญชีทีม หรือให้เจ้าของระบบเพิ่มบัญชีนี้ก่อน</p>
+        <p className="desc">ให้เจ้าของระบบเปิดสิทธิ์บัญชีทีมก่อน (ดู README)</p>
         <div><button type="button" className="btn-ghost" onClick={() => void fu.signOut()}>ออกจากระบบ</button></div>
       </section>
     )
@@ -47,7 +47,6 @@ export function Gate({ fu }: { fu: Followup }) {
 }
 
 function Login() {
-  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -55,19 +54,16 @@ function Login() {
     e.preventDefault()
     setBusy(true)
     setError(null)
-    try { await signIn(email, password) } catch (err) { setError(err instanceof Error ? err.message : String(err)) } finally { setBusy(false) }
+    try { await signIn(password) } catch (err) { setError(err instanceof Error ? err.message : String(err)) } finally { setBusy(false) }
   }
   return (
     <form className="card login" onSubmit={submit}>
       <div className="stack" style={{ gap: 4 }}>
         <h2>เข้าสู่ระบบติดตามลูกค้า</h2>
-        <p className="desc">ใช้อีเมลและรหัสผ่านของทีม ข้อมูลลูกค้าเห็นได้เฉพาะคนที่มีรหัส</p>
+        <p className="desc">ใส่รหัสทีมครั้งเดียว เครื่องนี้จะจำไว้ ครั้งหน้าเปิดแล้วเข้าได้เลย</p>
       </div>
-      <label className="field">อีเมลทีม
-        <input type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} />
-      </label>
-      <label className="field">รหัสผ่าน
-        <input type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} />
+      <label className="field">รหัสทีม
+        <input type="password" autoComplete="current-password" autoFocus required value={password} onChange={e => setPassword(e.target.value)} />
       </label>
       {error && <p className="msg-err" role="alert">{error}</p>}
       <div><button type="submit" className="btn" disabled={busy}>{busy ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ'}</button></div>

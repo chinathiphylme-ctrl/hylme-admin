@@ -1,4 +1,5 @@
 import type { PageId } from '../config/pages'
+import { TEAM_EMAIL } from '../config/team'
 import type { OrderLink, Role, Staff } from '../followup/report'
 import type { FuEvent, FuLead, LeadStatus, RoundResult } from '../followup/schedule'
 import type { LegacyRow } from '../followup/csv'
@@ -45,9 +46,9 @@ export const fromDbEvent = (r: DbEvent): FuEvent => ({
 
 // ---- sign-in ----
 
-export async function signIn(email: string, password: string) {
-  const { error } = await db().auth.signInWithPassword({ email: email.trim(), password })
-  if (error) throw new Error(/invalid/i.test(error.message) ? 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' : error.message)
+export async function signIn(password: string) {
+  const { error } = await db().auth.signInWithPassword({ email: TEAM_EMAIL, password })
+  if (error) throw new Error(/invalid/i.test(error.message) ? 'รหัสผ่านไม่ถูกต้อง' : error.message)
 }
 
 export async function signOut() {
