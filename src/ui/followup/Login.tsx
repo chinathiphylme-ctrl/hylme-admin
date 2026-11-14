@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { signIn } from '../../data/followup'
 import type { Followup } from './useFollowup'
 
-// what the follow-up tabs show until a staff member is signed in
+// what the follow-up tabs show until the team account is signed in and a name is picked
 export function Gate({ fu }: { fu: Followup }) {
   if (fu.status === 'loading') return <div className="grid g-200">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton" />)}</div>
   if (fu.status === 'error') {
@@ -14,11 +14,31 @@ export function Gate({ fu }: { fu: Followup }) {
       </section>
     )
   }
-  if (fu.status === 'noStaff') {
+  if (fu.status === 'noTeam') {
     return (
       <section className="card login">
         <h2>บัญชีนี้ยังไม่มีสิทธิ์ใช้ระบบติดตาม</h2>
-        <p className="desc">ให้เจ้าของระบบเพิ่มชื่อและบทบาทของบัญชีนี้ก่อน แล้วเข้าสู่ระบบใหม่</p>
+        <p className="desc">เข้าสู่ระบบด้วยบัญชีทีม หรือให้เจ้าของระบบเพิ่มบัญชีนี้ก่อน</p>
+        <div><button type="button" className="btn-ghost" onClick={() => void fu.signOut()}>ออกจากระบบ</button></div>
+      </section>
+    )
+  }
+  if (fu.status === 'pickName') {
+    const people = fu.staff.filter(s => s.active)
+    return (
+      <section className="card login">
+        <div className="stack" style={{ gap: 4 }}>
+          <h2>คุณคือใคร</h2>
+          <p className="desc">เครื่องนี้จะจำชื่อไว้ ทุกอย่างที่บันทึกจะขึ้นชื่อนี้ในประวัติ</p>
+        </div>
+        <div className="pick-names">
+          {people.map(s => (
+            <button key={s.id} type="button" className="btn-ghost" onClick={() => fu.pick(s.id)}>
+              {s.name}{s.name !== 'GM' && <span className="small">{s.role === 'gm' ? 'GM' : 'แอดมิน'}</span>}
+            </button>
+          ))}
+        </div>
+        <p className="small">ไม่มีชื่อคุณ? ให้คนในทีมเพิ่มที่แท็บรายงาน → รายชื่อทีม</p>
         <div><button type="button" className="btn-ghost" onClick={() => void fu.signOut()}>ออกจากระบบ</button></div>
       </section>
     )
@@ -41,9 +61,9 @@ function Login() {
     <form className="card login" onSubmit={submit}>
       <div className="stack" style={{ gap: 4 }}>
         <h2>เข้าสู่ระบบติดตามลูกค้า</h2>
-        <p className="desc">ข้อมูลลูกค้าเห็นได้เฉพาะทีมขาย แอดมินเห็นลูกค้าของตัวเอง GM เห็นทั้งหมด</p>
+        <p className="desc">ใช้อีเมลและรหัสผ่านของทีม ข้อมูลลูกค้าเห็นได้เฉพาะคนที่มีรหัส</p>
       </div>
-      <label className="field">อีเมล
+      <label className="field">อีเมลทีม
         <input type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} />
       </label>
       <label className="field">รหัสผ่าน

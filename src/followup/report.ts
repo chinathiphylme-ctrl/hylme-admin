@@ -3,7 +3,7 @@ import type { OrderRow } from '../parse/types'
 import { bangkokToday, groupEvents, isOpen, stateOf, type FuEvent, type FuLead } from './schedule'
 
 export type Role = 'admin' | 'gm'
-export type Staff = { userId: string; name: string; role: Role; active: boolean }
+export type Staff = { id: string; name: string; role: Role; active: boolean }
 export type OrderLink = { orderId: string; leadId: string; linkedAt: string; linkedBy: string | null }
 export type ReportFilter = { from: string; to: string; ownerId: string | 'all'; pageId: PageId | 'all'; product: string | 'all' }
 
@@ -71,12 +71,12 @@ export function report(
   }
 
   // every active admin is listed even with nothing to show, so a quiet week is visible
-  const listed = input.staff.filter(s => (s.role === 'admin' && s.active) || owners.has(s.userId))
+  const listed = input.staff.filter(s => (s.role === 'admin' && s.active) || owners.has(s.id))
   const byOwner: OwnerRow[] = listed
-    .filter(s => f.ownerId === 'all' || s.userId === f.ownerId)
+    .filter(s => f.ownerId === 'all' || s.id === f.ownerId)
     .map(s => {
-      const a = owners.get(s.userId) ?? blank()
-      return { ownerId: s.userId, name: s.name, leads: a.leads, open: a.open, overdue: a.overdue, followups: a.followups, won: a.won, sales: a.sales }
+      const a = owners.get(s.id) ?? blank()
+      return { ownerId: s.id, name: s.name, leads: a.leads, open: a.open, overdue: a.overdue, followups: a.followups, won: a.won, sales: a.sales }
     })
   const byProduct: ProductRow[] = [...products]
     .map(([product, a]) => ({ product, leads: a.leads, followups: a.followups, won: a.won, sales: a.sales }))

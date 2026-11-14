@@ -53,7 +53,10 @@ export function App() {
   const fu = useFollowup()
   // due today + overdue, for the sidebar badge
   const careCount = useMemo(
-    () => (fu.status === 'ready' ? queue(fu.leads, fu.events, bangkokToday()).filter(r => r.state !== 'waiting').length : null),
+    // an admin's badge counts their own customers, the GM's the whole team
+    () => (fu.status === 'ready'
+      ? queue(fu.leads, fu.events, bangkokToday()).filter(r => r.state !== 'waiting' && (fu.me.role === 'gm' || r.lead.ownerId === fu.me.id)).length
+      : null),
     [fu])
 
   useEffect(() => {
@@ -115,7 +118,7 @@ export function App() {
   if (tab === 'care' || tab === 'gm') {
     // the follow-up tabs have their own data and sign-in, so they work even when the dashboard data fails
     body = fu.status !== 'ready' ? <Gate fu={fu} />
-      : tab === 'care' ? <Care fu={fu} reload={fu.reload} signOut={fu.signOut} />
+      : tab === 'care' ? <Care fu={fu} reload={fu.reload} signOut={fu.signOut} switchUser={() => fu.pick(null)} />
         : <Report fu={fu} reload={fu.reload} />
   } else if (error) {
     body = (
@@ -150,7 +153,7 @@ export function App() {
   return (
     <div className="shell">
       <Sidebar tab={tab} setTab={goTab} followCount={follow.length} careCount={careCount}
-        showGm={fu.status === 'ready' && fu.me.role === 'gm'} unassigned={unassigned} latest={latest} uploads={base?.uploads ?? []} />
+        showGm={fu.status === 'ready'} unassigned={unassigned} latest={latest} uploads={base?.uploads ?? []} />
       <main className="main">
         <header className="head">
           <div className="head-top">

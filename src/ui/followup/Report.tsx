@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { PAGES, type PageId } from '../../config/pages'
-import { importLegacy } from '../../data/followup'
+import { importLegacy, saveStaff } from '../../data/followup'
 import { parseLegacyCsv, type LegacyRow } from '../../followup/csv'
-import { report, type ReportFilter } from '../../followup/report'
+import { report, type ReportFilter, type Role, type Staff } from '../../followup/report'
 import { bangkokToday } from '../../followup/schedule'
 import { addDays } from '../../metrics/range'
 import { rangeLabel } from '../viewModel'
@@ -34,10 +34,6 @@ export function Report({ fu, reload }: { fu: Ready; reload: () => Promise<void> 
   const products = [...new Set(fu.leads.map(l => l.product))].sort((a, b) => a.localeCompare(b, 'th'))
   const maxFollow = Math.max(1, ...r.byOwner.map(o => o.followups))
 
-  if (fu.me.role !== 'gm') {
-    return <section className="card"><h2>รายงานนี้สำหรับ GM</h2><p className="desc">แอดมินดูงานของตัวเองได้ที่เมนูติดตาม 7 รอบ</p></section>
-  }
-
   return (
     <section className="stack" style={{ gap: 16 }}>
       <div className="filters">
@@ -54,7 +50,7 @@ export function Report({ fu, reload }: { fu: Ready; reload: () => Promise<void> 
         <div className="fu-bar">
           <select aria-label="แอดมิน" value={ownerId} onChange={e => setOwnerId(e.target.value)}>
             <option value="all">ทุกแอดมิน</option>
-            {fu.staff.filter(s => s.role === 'admin' || fu.leads.some(l => l.ownerId === s.userId)).map(s => <option key={s.userId} value={s.userId}>{s.name}</option>)}
+            {fu.staff.filter(s => s.role === 'admin' || fu.leads.some(l => l.ownerId === s.id)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           <select aria-label="เพจ" value={pageId} onChange={e => setPageId(e.target.value as PageId | 'all')}>
             <option value="all">ทุกเพจ</option>
@@ -89,7 +85,7 @@ export function Report({ fu, reload }: { fu: Ready; reload: () => Promise<void> 
 
       <section className="card">
         <h2>ผลการทำงานรายแอดมิน</h2>
-        <p className="desc">นับตามผู้ดูแลลูกค้า ครั้งที่ GM บันทึกแทนนับให้ผู้ดูแล</p>
+        <p className="desc">นับตามผู้ดูแลลูกค้า ครั้งที่คนอื่นบันทึกแทนนับให้ผู้ดูแล</p>
         <div className="table-wrap">
           <table>
             <thead><tr><th>แอดมิน</th><th style={{ textAlign: 'right' }}>ลูกค้า</th><th style={{ textAlign: 'right' }}>กำลังติดตาม</th><th style={{ textAlign: 'right' }}>ค้าง</th><th>ติดตามแล้ว (ครั้ง)</th><th style={{ textAlign: 'right' }}>ซื้อแล้ว</th><th style={{ textAlign: 'right' }}>ยอดขาย</th></tr></thead>
@@ -137,6 +133,7 @@ export function Report({ fu, reload }: { fu: Ready; reload: () => Promise<void> 
         )}
       </section>
 
+      <Team fu={fu} onDone={async msg => { await reload(); showToast(msg) }} />
       <Import fu={fu} onDone={async msg => { await reload(); showToast(msg) }} />
       {toast}
     </section>
@@ -150,6 +147,62 @@ function Tile({ label, value, note, color }: { label: string; value: string; not
       <span className="value" style={color ? { color } : undefined}>{value}</span>
       {note && <span className="note">{note}</span>}
     </div>
+  )
+}
+
+const ROLE_LABEL: Record<Role, string> = { admin: 'แอดมิน', gm: 'GM' }
+
+// the people who can be picked after signing in; nobody is deleted, so their history keeps its names
+function Team({ fu, onDone }: { fu: Ready; onDone: (msg: string) => Promise<void> }) {
+  const [name, setName] = useState('')
+  const [role, setRole] = useState<Role>('admin')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const people = [...fu.staff].sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, 'th'))
+
+  const run = async (fn: () => Promise<unknown>, msg: string) => {
+    setBusy(true)
+    setError(null)
+    try { await fn(); await onDone(msg) } catch (e) { setError(errText(e)) } finally { setBusy(false) }
+  }
+  const toggle = (s: Staff) => {
+    if (s.id === fu.me.id && s.active) { setError('ปิดชื่อของตัวเองไม่ได้ ให้คนอื่นในทีมเป็นคนปิด'); return }
+    void run(() => saveStaff({ ...s, active: !s.active }), s.active ? `ปิดการใช้งาน ${s.name} แล้ว` : `เปิดใช้งาน ${s.name} แล้ว`)
+  }
+  const rename = (s: Staff) => {
+    const next = window.prompt('ชื่อใหม่', s.name)?.trim()
+    if (next && next !== s.name) void run(() => saveStaff({ ...s, name: next }), `เปลี่ยนชื่อเป็น ${next} แล้ว`)
+  }
+
+  return (
+    <details className="card">
+      <summary style={{ cursor: 'pointer', fontWeight: 600 }}>รายชื่อทีม ({fu.staff.filter(s => s.active).length} คน)</summary>
+      <p className="desc">ชื่อที่ให้เลือกหลังเข้าสู่ระบบ คนที่ออกแล้วให้กดปิด ลูกค้าและประวัติเดิมยังอยู่ ย้ายผู้ดูแลได้ที่หน้าแก้ไขลูกค้า</p>
+      <ul className="team-list">
+        {people.map(s => (
+          <li key={s.id} className={s.active ? '' : 'off'}>
+            <span><b>{s.name}</b>{s.name === ROLE_LABEL[s.role] ? '' : ` · ${ROLE_LABEL[s.role]}`}{s.active ? '' : ' · ปิดแล้ว'}{s.id === fu.me.id ? ' · คุณ' : ''}</span>
+            <span className="row-actions">
+              <button type="button" className="linkbtn" disabled={busy} onClick={() => rename(s)}>เปลี่ยนชื่อ</button>
+              <button type="button" className="linkbtn" disabled={busy} onClick={() => toggle(s)}>{s.active ? 'ปิด' : 'เปิดใช้'}</button>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <form className="fu-bar" onSubmit={e => { e.preventDefault(); void run(async () => { await saveStaff({ id: null, name, role, active: true }); setName('') }, `เพิ่ม ${name.trim()} แล้ว`) }}>
+        <label className="field" style={{ flex: '1 1 200px' }}>เพิ่มชื่อ
+          <input required maxLength={40} value={name} onChange={e => setName(e.target.value)} placeholder="เช่น พิม" />
+        </label>
+        <label className="field" style={{ flex: '0 1 140px' }}>บทบาท
+          <select value={role} onChange={e => setRole(e.target.value as Role)}>
+            <option value="admin">แอดมิน</option>
+            <option value="gm">GM</option>
+          </select>
+        </label>
+        <button type="submit" className="btn-ghost" style={{ alignSelf: 'flex-end', minHeight: 44 }} disabled={busy || !name.trim()}>เพิ่ม</button>
+      </form>
+      {error && <p className="msg-err" role="alert">{error}</p>}
+    </details>
   )
 }
 
@@ -169,7 +222,7 @@ function Import({ fu, onDone }: { fu: Ready; onDone: (msg: string) => Promise<vo
       const res = parseLegacyCsv(await file.text())
       setParsed({ ...res, file: file.name })
       const guess: Record<string, string> = {}
-      for (const n of new Set(res.rows.map(r => r.ownerName))) guess[n] = admins.find(s => s.name === n)?.userId ?? ''
+      for (const n of new Set(res.rows.map(r => r.ownerName))) guess[n] = admins.find(s => s.name === n)?.id ?? ''
       setOwners(guess)
     } catch (e) { setError(errText(e)) }
   }
@@ -200,7 +253,7 @@ function Import({ fu, onDone }: { fu: Ready; onDone: (msg: string) => Promise<vo
               <label key={n} className="field">"{n || 'ไม่ระบุ'}" →
                 <select value={owners[n] ?? ''} onChange={e => setOwners(o => ({ ...o, [n]: e.target.value }))}>
                   <option value="">เลือกแอดมิน</option>
-                  {admins.map(s => <option key={s.userId} value={s.userId}>{s.name}</option>)}
+                  {admins.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </label>
             ))}

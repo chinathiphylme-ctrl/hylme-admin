@@ -19,31 +19,34 @@ const STATUS_FILTERS: [string, string][] = [
   ['optout', 'หยุดติดต่อ'], ['paused', 'พักติดตาม'], ['completed', 'ครบ 7 รอบ'],
 ]
 
-export function Care({ fu, reload, signOut }: { fu: Ready; reload: () => Promise<void>; signOut: () => Promise<void> }) {
+export function Care({ fu, reload, signOut, switchUser }: {
+  fu: Ready; reload: () => Promise<void>; signOut: () => Promise<void>; switchUser: () => void
+}) {
   const today = bangkokToday()
   const gm = fu.me.role === 'gm'
   const [sub, setSub] = useState<Sub>('today')
   const [taskFilter, setTaskFilter] = useState<TaskFilter>('open')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [owner, setOwner] = useState('all')
+  // everyone sees every customer; an admin starts on their own, the GM on the whole team
+  const [owner, setOwner] = useState(gm ? 'all' : fu.me.id)
   const [q, setQ] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
   const [form, setForm] = useState<{ lead: FuLead | null } | null>(null)
   const [toast, showToast] = useToast()
 
   const byLead = useMemo(() => groupEvents(fu.events), [fu.events])
-  const nameOf = (id: string) => fu.staff.find(s => s.userId === id)?.name ?? '—'
+  const nameOf = (id: string) => fu.staff.find(s => s.id === id)?.name ?? '—'
+  const mine = (l: FuLead) => owner === 'all' || l.ownerId === owner
   const matches = (l: FuLead) => {
     const s = q.trim().toLowerCase()
-    return (owner === 'all' || l.ownerId === owner) &&
-      (!s || [l.name, l.product, nameOf(l.ownerId), l.pageId ? pageName(l.pageId) : '', l.objection].some(x => x.toLowerCase().includes(s)))
+    return mine(l) && (!s || [l.name, l.product, nameOf(l.ownerId), l.pageId ? pageName(l.pageId) : '', l.objection].some(x => x.toLowerCase().includes(s)))
   }
-  const rows = useMemo(() => queue(fu.leads, fu.events, today), [fu.leads, fu.events, today])
+  const rows = useMemo(() => queue(fu.leads, fu.events, today).filter(r => owner === 'all' || r.lead.ownerId === owner), [fu.leads, fu.events, today, owner])
   const counts = {
     due: rows.filter(r => r.state === 'due').length,
     overdue: rows.filter(r => r.state === 'overdue').length,
     open: rows.length,
-    won: fu.leads.filter(l => l.status === 'won').length,
+    won: fu.leads.filter(l => mine(l) && l.status === 'won').length,
   }
   const week = addDays(today, 7)
   const tasks = rows.filter(r => matches(r.lead) && (
@@ -58,7 +61,7 @@ export function Care({ fu, reload, signOut }: { fu: Ready; reload: () => Promise
   const saved = async (msg: string) => { await reload(); showToast(msg) }
 
   const download = () => {
-    const names = new Map(fu.staff.map(s => [s.userId, s.name]))
+    const names = new Map(fu.staff.map(s => [s.id, s.name]))
     const blob = new Blob([exportCsv(listed.map(x => x.l), fu.events, names, today)], { type: 'text/csv;charset=utf-8' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
@@ -67,10 +70,12 @@ export function Care({ fu, reload, signOut }: { fu: Ready; reload: () => Promise
     setTimeout(() => URL.revokeObjectURL(a.href), 1500)
   }
 
-  const ownerSelect = gm && (
+  const ownerSelect = (
     <select aria-label="ผู้ดูแล" value={owner} onChange={e => setOwner(e.target.value)}>
-      <option value="all">ผู้ดูแลทั้งหมด</option>
-      {fu.staff.filter(s => s.role === 'admin' || fu.leads.some(l => l.ownerId === s.userId)).map(s => <option key={s.userId} value={s.userId}>{s.name}</option>)}
+      <option value="all">ทุกคนในทีม</option>
+      {fu.staff.filter(s => (s.role === 'admin' && s.active) || s.id === fu.me.id || fu.leads.some(l => l.ownerId === s.id)).map(s => (
+        <option key={s.id} value={s.id}>{s.id === fu.me.id ? `${s.name} (ฉัน)` : s.name}</option>
+      ))}
     </select>
   )
   const search = (
@@ -87,6 +92,7 @@ export function Care({ fu, reload, signOut }: { fu: Ready; reload: () => Promise
         </div>
         <div className="fu-user">
           <span><b>{fu.me.name}</b> · {gm ? 'GM' : 'แอดมิน'}</span>
+          <button type="button" className="btn-ghost" onClick={switchUser} title="ใช้เมื่อคนอื่นจะใช้เครื่องนี้">เปลี่ยนคน</button>
           <button type="button" className="btn-ghost" onClick={() => void signOut()}>ออกจากระบบ</button>
           <button type="button" className="btn" onClick={() => setForm({ lead: null })}>＋ เพิ่มลูกค้า</button>
         </div>
@@ -132,7 +138,7 @@ export function Care({ fu, reload, signOut }: { fu: Ready; reload: () => Promise
                 {tasks.map(r => (
                   <button key={r.lead.id} type="button" className="fu-card" onClick={() => setOpenId(r.lead.id)}>
                     <span className="fu-name">{r.lead.name}</span>
-                    <span className="meta">{r.lead.product}{gm ? ` · ${nameOf(r.lead.ownerId)}` : ''} · กำหนด {thaiDay(r.due)}</span>
+                    <span className="meta">{r.lead.product} · {nameOf(r.lead.ownerId)} · กำหนด {thaiDay(r.due)}</span>
                     <span className="right"><span className="st st-waiting">รอบ {r.round}</span><StatePill state={r.state} late={r.daysLate} /></span>
                   </button>
                 ))}
@@ -152,7 +158,7 @@ export function Care({ fu, reload, signOut }: { fu: Ready; reload: () => Promise
             {ownerSelect}
             <button type="button" className="btn-ghost" style={{ minHeight: 44 }} onClick={download} disabled={!listed.length}>↓ ส่งออก CSV</button>
           </div>
-          <p className="small">{listed.length} / {fu.leads.length} ราย{gm ? '' : ' · แสดงเฉพาะลูกค้าที่คุณดูแล'}</p>
+          <p className="small">{listed.length} / {fu.leads.length} ราย</p>
           {listed.length === 0 ? <Empty title="ไม่พบรายชื่อลูกค้า" hint="เปลี่ยนตัวกรอง หรือกดเพิ่มลูกค้า" /> : (
             <>
               <div className="table-wrap fu-table">
@@ -183,7 +189,7 @@ export function Care({ fu, reload, signOut }: { fu: Ready; reload: () => Promise
                   return (
                     <button key={l.id} type="button" className="fu-card" onClick={() => setOpenId(l.id)}>
                       <span className="fu-name">{l.name}</span>
-                      <span className="meta">{l.product}{gm ? ` · ${nameOf(l.ownerId)}` : ''}{r ? ` · ถัดไป ${thaiDay(dueDay(l.firstDay, r))}` : ''}</span>
+                      <span className="meta">{l.product} · {nameOf(l.ownerId)}{r ? ` · ถัดไป ${thaiDay(dueDay(l.firstDay, r))}` : ''}</span>
                       <span className="right"><StatePill state={st} /></span>
                     </button>
                   )
@@ -198,7 +204,7 @@ export function Care({ fu, reload, signOut }: { fu: Ready; reload: () => Promise
 
       {open && !form && (
         <LeadDrawer lead={open} events={byLead.get(open.id) ?? []} links={fu.links.filter(k => k.leadId === open.id)} orders={fu.orders}
-          staff={fu.staff} me={fu.me} onClose={() => setOpenId(null)} onEdit={() => setForm({ lead: open })} onSaved={saved} />
+          staff={fu.staff} onClose={() => setOpenId(null)} onEdit={() => setForm({ lead: open })} onSaved={saved} />
       )}
       {form && (
         <LeadForm lead={form.lead} events={form.lead ? byLead.get(form.lead.id) ?? [] : []} me={fu.me} staff={fu.staff}

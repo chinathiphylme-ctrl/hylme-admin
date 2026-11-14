@@ -59,6 +59,13 @@ export async function sessionUserId(): Promise<string | null> {
   return data.session?.user.id ?? null
 }
 
+// the shared team account is listed in fu_team; any other account signed in here sees nothing
+export async function isTeamMember(): Promise<boolean> {
+  const { data, error } = await db().from('fu_team').select('user_id').limit(1)
+  if (error) throw new Error(error.message)
+  return (data ?? []).length > 0
+}
+
 export function onAuthChange(cb: () => void): () => void {
   // only react to real sign-in/out; supabase-js deadlocks if its own calls run inside this callback, hence the timeout
   const { data } = db().auth.onAuthStateChange(event => {
@@ -67,19 +74,37 @@ export function onAuthChange(cb: () => void): () => void {
   return () => data.subscription.unsubscribe()
 }
 
-// ---- reads (row-level security limits admins to their own customers) ----
+// ---- who is using this device ----
+// The team shares one sign-in, so each person picks their name once per device; every save records it.
+
+const ACTOR_KEY = 'hylme-fu-actor'
+let actorMemo: string | null = null
+
+export function getActor(): string | null {
+  try { return localStorage.getItem(ACTOR_KEY) ?? actorMemo } catch { return actorMemo }
+}
+
+export function setActor(id: string | null) {
+  actorMemo = id
+  try { if (id) localStorage.setItem(ACTOR_KEY, id); else localStorage.removeItem(ACTOR_KEY) } catch { /* private window: memory only */ }
+}
+
+// writes carry the picked name; the database refuses a missing or inactive one
+const act = <T>(fn: string, args: Record<string, unknown>) => rpc<T>(fn, { p_actor: getActor(), ...args })
+
+// ---- reads (only accounts on the team can read; anon sees nothing) ----
 
 export type FollowupData = { staff: Staff[]; leads: FuLead[]; events: FuEvent[]; links: OrderLink[] }
 
 export async function fetchFollowup(): Promise<FollowupData> {
   const [staff, leads, events, links] = await Promise.all([
-    all<{ user_id: string; name: string; role: Role; active: boolean }>('staff', 'user_id,name,role,active', 'name'),
+    all<{ id: string; name: string; role: Role; active: boolean }>('staff', 'id,name,role,active', 'name'),
     all<DbLead>('fu_leads', 'id,name,product,owner_id,first_day,page_id,chat_url,objection,notes,status,version,created_at,updated_at', 'first_day'),
     all<DbEvent>('fu_events', 'id,lead_id,kind,round_no,result,due_day,note,order_id,at,by', 'id'),
     all<{ order_id: string; lead_id: string; linked_at: string; linked_by: string | null }>('fu_orders', 'order_id,lead_id,linked_at,linked_by', 'linked_at'),
   ])
   return {
-    staff: staff.map(s => ({ userId: s.user_id, name: s.name, role: s.role, active: s.active })),
+    staff: staff.map(s => ({ id: s.id, name: s.name, role: s.role, active: s.active })),
     leads: leads.map(fromDbLead),
     events: events.map(fromDbEvent),
     links: links.map(k => ({ orderId: k.order_id, leadId: k.lead_id, linkedAt: k.linked_at, linkedBy: k.linked_by })),
@@ -105,7 +130,7 @@ export type LeadInput = {
   pageId: PageId | null; chatUrl: string; objection: string; notes: string
 }
 
-export const saveLead = (l: LeadInput) => rpc<string>('fu_save_lead', {
+export const saveLead = (l: LeadInput) => act<string>('fu_save_lead', {
   p_id: l.id, p_version: l.version, p_name: l.name, p_product: l.product, p_owner: l.ownerId, p_first_day: l.firstDay,
   p_page: l.pageId ?? '', p_chat_url: l.chatUrl, p_objection: l.objection, p_notes: l.notes,
 })
@@ -114,21 +139,24 @@ export const sameName = (name: string, exclude: string | null) =>
   rpc<{ owner_name: string; status: LeadStatus; first_day: string }[]>('fu_same_name', { p_name: name, p_exclude: exclude })
 
 export const recordRound = (lead: FuLead, round: number, result: RoundResult, note: string, orderId: string) =>
-  rpc<number>('fu_record_round', { p_lead: lead.id, p_version: lead.version, p_round: round, p_result: result, p_note: note, p_order: orderId })
+  act<number>('fu_record_round', { p_lead: lead.id, p_version: lead.version, p_round: round, p_result: result, p_note: note, p_order: orderId })
 
 export const skipRound = (lead: FuLead, round: number, reason: string) =>
-  rpc<number>('fu_skip_round', { p_lead: lead.id, p_version: lead.version, p_round: round, p_reason: reason })
+  act<number>('fu_skip_round', { p_lead: lead.id, p_version: lead.version, p_round: round, p_reason: reason })
 
 export const setStatus = (lead: FuLead, status: LeadStatus, note: string, orderId: string) =>
-  rpc<number>('fu_set_status', { p_lead: lead.id, p_version: lead.version, p_status: status, p_note: note, p_order: orderId })
+  act<number>('fu_set_status', { p_lead: lead.id, p_version: lead.version, p_status: status, p_note: note, p_order: orderId })
 
-export const linkOrder = (leadId: string, orderId: string) => rpc<void>('fu_link_order', { p_lead: leadId, p_order: orderId })
-export const unlinkOrder = (orderId: string) => rpc<void>('fu_unlink_order', { p_order: orderId })
-export const deleteLead = (leadId: string) => rpc<void>('fu_delete_lead', { p_lead: leadId })
+export const linkOrder = (leadId: string, orderId: string) => act<void>('fu_link_order', { p_lead: leadId, p_order: orderId })
+export const unlinkOrder = (orderId: string) => act<void>('fu_unlink_order', { p_order: orderId })
+export const deleteLead = (leadId: string) => act<void>('fu_delete_lead', { p_lead: leadId })
 
-export const importLegacy = (rows: (LegacyRow & { ownerId: string })[]) => rpc<number>('fu_import', {
+export const importLegacy = (rows: (LegacyRow & { ownerId: string })[]) => act<number>('fu_import', {
   p_rows: rows.map(r => ({
     name: r.name, product: r.product, owner_id: r.ownerId, first_day: r.firstDay, page_id: r.pageId ?? '', chat_url: r.chatUrl,
     objection: r.objection, notes: r.notes, status: r.status, history: r.history,
   })),
 })
+
+export const saveStaff = (p: { id: string | null; name: string; role: Role; active: boolean }) =>
+  act<string>('fu_save_staff', { p_id: p.id, p_name: p.name, p_role: p.role, p_active: p.active })

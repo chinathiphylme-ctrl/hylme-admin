@@ -4,9 +4,9 @@ import type { FuEvent, FuLead } from '../src/followup/schedule'
 import type { OrderRow } from '../src/parse/types'
 
 const staff = [
-  { userId: 'u1', name: 'พี่ก้อย', role: 'admin' as const, active: true },
-  { userId: 'u2', name: 'นุ่น', role: 'admin' as const, active: true },
-  { userId: 'g', name: 'GM', role: 'gm' as const, active: true },
+  { id: 'u1', name: 'พี่ก้อย', role: 'admin' as const, active: true },
+  { id: 'u2', name: 'นุ่น', role: 'admin' as const, active: true },
+  { id: 'g', name: 'GM', role: 'gm' as const, active: true },
 ]
 const lead = (id: string, o: Partial<FuLead> = {}): FuLead => ({
   id, name: id, product: 'EVOO 250 มล.', ownerId: 'u1', firstDay: '2026-11-10', pageId: '516356078238016',

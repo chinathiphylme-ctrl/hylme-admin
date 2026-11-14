@@ -277,3 +277,11 @@ tr.click:hover td { background: #F7FAF8; }
 .panel-soft .field, .login .field, .modal .field, details.card > .field { flex: none; }
 .modal:focus { outline: none; }
 details.panel-soft:not([open]) { gap: 0; }
+
+/* follow-up: pick who is using this device, and the team list */
+.pick-names { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.pick-names .btn-ghost { min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 16px; font-weight: 600; }
+.team-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.team-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line2); font-size: 14px; }
+.team-list li.off { color: var(--muted2); }
+.team-list .row-actions { display: flex; gap: 14px; flex-shrink: 0; }

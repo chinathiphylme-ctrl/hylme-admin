@@ -11,17 +11,17 @@ import { thaiDay } from '../viewModel'
 import { dayYear, errText, Modal, money, StatePill, stamp } from './common'
 
 type Props = {
-  lead: FuLead; events: FuEvent[]; links: OrderLink[]; orders: OrderRow[]; staff: Staff[]; me: Staff
+  lead: FuLead; events: FuEvent[]; links: OrderLink[]; orders: OrderRow[]; staff: Staff[]
   onClose: () => void; onEdit: () => void; onSaved: (msg: string) => Promise<void>
 }
 
 const RESULTS: [RoundResult, string][] = [['sent', 'ส่งข้อมูลแล้ว'], ['waiting', 'รอลูกค้าตอบ'], ['won', 'ซื้อแล้ว'], ['optout', 'ขอหยุดติดต่อ']]
 
-export function LeadDrawer({ lead, events, links, orders, staff, me, onClose, onEdit, onSaved }: Props) {
+export function LeadDrawer({ lead, events, links, orders, staff, onClose, onEdit, onSaved }: Props) {
   const today = bangkokToday()
   const st = stateOf(lead, events, today)
   const round = lead.status === 'active' ? nextRound(events) : null
-  const nameOf = (id: string | null) => staff.find(s => s.userId === id)?.name ?? '—'
+  const nameOf = (id: string | null) => staff.find(s => s.id === id)?.name ?? '—'
   const safeUrl = /^https?:\/\//i.test(lead.chatUrl) ? lead.chatUrl : ''
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -56,7 +56,7 @@ export function LeadDrawer({ lead, events, links, orders, staff, me, onClose, on
 
       {round && <RecordPanel key={`${lead.id}-${lead.version}`} lead={lead} round={round} busy={busy} run={run} />}
 
-      <StatusPanel key={`s-${lead.id}-${lead.version}`} lead={lead} me={me} busy={busy} run={run} />
+      <StatusPanel key={`s-${lead.id}-${lead.version}`} lead={lead} busy={busy} run={run} />
 
       {(lead.status === 'won' || links.length > 0) && (
         <OrdersPanel key={`o-${lead.id}-${links.length}`} lead={lead} links={links} orders={orders} busy={busy} run={run} />
@@ -82,15 +82,13 @@ export function LeadDrawer({ lead, events, links, orders, staff, me, onClose, on
         </ul>
       </section>
 
-      {me.role === 'gm' && (
-        <div className="actions">
-          <span className="small left">ลบแล้วประวัติทั้งหมดของลูกค้ารายนี้จะหายด้วย</span>
-          <button type="button" className={armed ? 'btn-danger armed' : 'btn-danger'} disabled={busy}
-            onClick={() => (armed ? void run(async () => { await deleteLead(lead.id); onClose() }, 'ลบลูกค้าแล้ว') : setArmed(true))}>
-            {armed ? 'กดอีกครั้งเพื่อยืนยันการลบ' : 'ลบลูกค้า'}
-          </button>
-        </div>
-      )}
+      <div className="actions">
+        <span className="small left">ลบแล้วประวัติทั้งหมดของลูกค้ารายนี้จะหายด้วย ใช้เมื่อเพิ่มผิดหรือซ้ำเท่านั้น</span>
+        <button type="button" className={armed ? 'btn-danger armed' : 'btn-danger'} disabled={busy}
+          onClick={() => (armed ? void run(async () => { await deleteLead(lead.id); onClose() }, 'ลบลูกค้าแล้ว') : setArmed(true))}>
+          {armed ? 'กดอีกครั้งเพื่อยืนยันการลบ' : 'ลบลูกค้า'}
+        </button>
+      </div>
     </Modal>
   )
 }
@@ -183,15 +181,15 @@ function RecordPanel({ lead, round, busy, run }: { lead: FuLead; round: number; 
   )
 }
 
-function StatusPanel({ lead, me, busy, run }: { lead: FuLead; me: Staff; busy: boolean; run: Run }) {
+function StatusPanel({ lead, busy, run }: { lead: FuLead; busy: boolean; run: Run }) {
   const options: [LeadStatus, string][] = lead.status === 'active'
     ? [['won', 'ซื้อแล้ว (นอกรอบ)'], ['optout', 'ขอหยุดติดต่อ'], ['paused', 'พักติดตามชั่วคราว']]
     : lead.status === 'paused' ? [['active', 'กลับมาติดตาม'], ['won', 'ซื้อแล้ว'], ['optout', 'ขอหยุดติดต่อ']]
-      : me.role === 'gm' ? [['active', 'เปิดติดตามอีกครั้ง (แก้ไขสถานะ)']] : []
+      : [['active', 'เปิดติดตามอีกครั้ง (แก้ไขสถานะ)']]
   const [to, setTo] = useState<LeadStatus | ''>('')
   const [note, setNote] = useState('')
   const [order, setOrder] = useState('')
-  if (!options.length) return null
+  const reopen = to === 'active' && (lead.status === 'won' || lead.status === 'optout')
   return (
     <details className="panel-soft">
       <summary style={{ cursor: 'pointer', fontWeight: 600, minHeight: 32 }}>เปลี่ยนสถานะลูกค้า</summary>
@@ -207,12 +205,12 @@ function StatusPanel({ lead, me, busy, run }: { lead: FuLead; me: Staff; busy: b
             <input value={order} maxLength={40} onChange={e => setOrder(e.target.value)} />
           </label>
         )}
-        <label className="field wide">หมายเหตุ
+        <label className="field wide">{reopen ? 'เหตุผลที่เปิดติดตามอีกครั้ง *' : 'หมายเหตุ'}
           <input value={note} maxLength={300} onChange={e => setNote(e.target.value)} />
         </label>
       </div>
       <div className="actions">
-        <button type="button" className="btn-ghost" disabled={busy || !to}
+        <button type="button" className="btn-ghost" disabled={busy || !to || (reopen && note.trim().length < 3)}
           onClick={() => void run(() => setStatus(lead, to as LeadStatus, note, order), `เปลี่ยนสถานะเป็น ${STATUS_LABEL[to as LeadStatus]} แล้ว`)}>
           บันทึกสถานะ
         </button>

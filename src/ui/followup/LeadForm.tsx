@@ -12,7 +12,7 @@ export function LeadForm({ lead, events, me, staff, onClose, onSaved }: {
   const today = bangkokToday()
   const gm = me.role === 'gm'
   // the GM usually adds a customer for an admin, so start with the first admin rather than the GM
-  const firstOwner = gm ? (staff.find(s => s.role === 'admin' && s.active)?.userId ?? me.userId) : me.userId
+  const firstOwner = gm ? (staff.find(s => s.role === 'admin' && s.active)?.id ?? me.id) : me.id
   const roundsDone = events.some(e => e.kind === 'round' || e.kind === 'skip')
   const [f, setF] = useState({
     name: lead?.name ?? '', product: lead?.product ?? '', ownerId: lead?.ownerId ?? firstOwner, firstDay: lead?.firstDay ?? today,
@@ -22,7 +22,8 @@ export function LeadForm({ lead, events, me, staff, onClose, onSaved }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF(x => ({ ...x, [k]: v }))
-  const owners = staff.filter(s => s.active && (gm || s.userId === me.userId))
+  // someone who has left can stay the owner of an old customer until it is moved
+  const owners = staff.filter(s => s.active || s.id === lead?.ownerId)
   // the product a customer asked about may not be in the list (older records, new products)
   const products = f.product && !PRODUCTS.includes(f.product) ? [f.product, ...PRODUCTS] : PRODUCTS
 
@@ -61,8 +62,8 @@ export function LeadForm({ lead, events, me, staff, onClose, onSaved }: {
             </select>
           </label>
           <label className="field">แอดมินผู้รับผิดชอบ *
-            <select value={f.ownerId} disabled={!gm} onChange={e => set('ownerId', e.target.value)}>
-              {owners.map(s => <option key={s.userId} value={s.userId}>{s.name}</option>)}
+            <select value={f.ownerId} onChange={e => set('ownerId', e.target.value)}>
+              {owners.map(s => <option key={s.id} value={s.id}>{s.active ? s.name : `${s.name} (ไม่ได้ใช้งานแล้ว)`}</option>)}
             </select>
           </label>
           <label className="field">วันที่คุยครั้งแรก (วันที่ 1) *
