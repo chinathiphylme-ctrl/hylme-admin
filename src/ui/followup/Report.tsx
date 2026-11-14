@@ -1,0 +1,218 @@
+import { useMemo, useState } from 'react'
+import { PAGES, type PageId } from '../../config/pages'
+import { importLegacy } from '../../data/followup'
+import { parseLegacyCsv, type LegacyRow } from '../../followup/csv'
+import { report, type ReportFilter } from '../../followup/report'
+import { bangkokToday } from '../../followup/schedule'
+import { addDays } from '../../metrics/range'
+import { rangeLabel } from '../viewModel'
+import { errText, money, useToast } from './common'
+import type { Ready } from './useFollowup'
+
+type Preset = 'today' | '7d' | '30d' | 'month' | 'custom'
+const PRESETS: [Preset, string][] = [['today', 'วันนี้'], ['7d', '7 วัน'], ['30d', '30 วัน'], ['month', 'เดือนนี้'], ['custom', 'กำหนดเอง']]
+
+export function Report({ fu, reload }: { fu: Ready; reload: () => Promise<void> }) {
+  const today = bangkokToday()
+  const [preset, setPreset] = useState<Preset>('30d')
+  const [custom, setCustom] = useState({ from: addDays(today, -6), to: today })
+  const [ownerId, setOwnerId] = useState('all')
+  const [pageId, setPageId] = useState<PageId | 'all'>('all')
+  const [product, setProduct] = useState('all')
+  const [toast, showToast] = useToast()
+
+  const range = preset === 'today' ? { from: today, to: today }
+    : preset === '7d' ? { from: addDays(today, -6), to: today }
+      : preset === '30d' ? { from: addDays(today, -29), to: today }
+        : preset === 'month' ? { from: `${today.slice(0, 8)}01`, to: today }
+          : custom
+  const filter: ReportFilter = { ...range, ownerId, pageId, product }
+  const r = useMemo(
+    () => report({ leads: fu.leads, events: fu.events, links: fu.links, orders: fu.orders, staff: fu.staff, today }, filter),
+    [fu, today, filter.from, filter.to, ownerId, pageId, product], // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  const products = [...new Set(fu.leads.map(l => l.product))].sort((a, b) => a.localeCompare(b, 'th'))
+  const maxFollow = Math.max(1, ...r.byOwner.map(o => o.followups))
+
+  if (fu.me.role !== 'gm') {
+    return <section className="card"><h2>รายงานนี้สำหรับ GM</h2><p className="desc">แอดมินดูงานของตัวเองได้ที่เมนูติดตาม 7 รอบ</p></section>
+  }
+
+  return (
+    <section className="stack" style={{ gap: 16 }}>
+      <div className="filters">
+        <div className="chips" role="group" aria-label="ช่วงเวลา">
+          {PRESETS.map(([k, t]) => <button key={k} type="button" className="chip" aria-pressed={preset === k} onClick={() => setPreset(k)}>{t}</button>)}
+        </div>
+        {preset === 'custom' && (
+          <span className="custom-range">
+            <input type="date" aria-label="ตั้งแต่" value={custom.from} max={custom.to} onChange={e => setCustom(c => ({ ...c, from: e.target.value }))} />
+            –
+            <input type="date" aria-label="ถึง" value={custom.to} min={custom.from} max={today} onChange={e => setCustom(c => ({ ...c, to: e.target.value }))} />
+          </span>
+        )}
+        <div className="fu-bar">
+          <select aria-label="แอดมิน" value={ownerId} onChange={e => setOwnerId(e.target.value)}>
+            <option value="all">ทุกแอดมิน</option>
+            {fu.staff.filter(s => s.role === 'admin' || fu.leads.some(l => l.ownerId === s.userId)).map(s => <option key={s.userId} value={s.userId}>{s.name}</option>)}
+          </select>
+          <select aria-label="เพจ" value={pageId} onChange={e => setPageId(e.target.value as PageId | 'all')}>
+            <option value="all">ทุกเพจ</option>
+            {PAGES.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <select aria-label="สินค้า" value={product} onChange={e => setProduct(e.target.value)}>
+            <option value="all">ทุกสินค้า</option>
+            {products.map(p => <option key={p}>{p}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <p className="sub">ช่วง {rangeLabel(range.from, range.to)} · "ถึงกำหนดวันนี้" และ "งานค้าง" เป็นสถานะ ณ วันนี้ ไม่ขึ้นกับช่วงที่เลือก</p>
+
+      <div className="grid g-200">
+        <Tile label="ถึงกำหนดวันนี้" value={String(r.dueToday)} color="#5C3A06" />
+        <Tile label="งานค้าง (เลยกำหนด)" value={String(r.overdue)} color="#C2410C" />
+        <Tile label="ติดตามแล้ว" value={`${r.followups}`} note={`ครั้ง · วันนี้ ${r.followupsToday} ครั้ง · ข้าม ${r.skips}`} />
+        <Tile label="ซื้อแล้ว" value={`${r.won}`} note="ราย ในช่วงที่เลือก" color="#1F7A4A" />
+        <Tile label="ยอดขายหลังติดตาม" value={money(r.sales)} note={`${r.salesOrders} ออเดอร์ที่ยืนยันจากไฟล์ Pancake`} />
+      </div>
+
+      {(r.pending > 0 || r.cancelled > 0 || r.wonNoOrder > 0) && (
+        <div className="callout">
+          ตรวจสอบยอด: {[
+            r.pending > 0 && `ออเดอร์รอตรวจ ${r.pending} รายการ (ยังไม่พบในไฟล์ออเดอร์ที่อัปโหลด)`,
+            r.cancelled > 0 && `ออเดอร์ยกเลิก/คืน ${r.cancelled} รายการ (ไม่นับยอด)`,
+            r.wonNoOrder > 0 && `ลูกค้าซื้อแล้วแต่ยังไม่ใส่เลขออเดอร์ ${r.wonNoOrder} ราย`,
+          ].filter(Boolean).join(' · ')}
+        </div>
+      )}
+
+      <section className="card">
+        <h2>ผลการทำงานรายแอดมิน</h2>
+        <p className="desc">นับตามผู้ดูแลลูกค้า ครั้งที่ GM บันทึกแทนนับให้ผู้ดูแล</p>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>แอดมิน</th><th style={{ textAlign: 'right' }}>ลูกค้า</th><th style={{ textAlign: 'right' }}>กำลังติดตาม</th><th style={{ textAlign: 'right' }}>ค้าง</th><th>ติดตามแล้ว (ครั้ง)</th><th style={{ textAlign: 'right' }}>ซื้อแล้ว</th><th style={{ textAlign: 'right' }}>ยอดขาย</th></tr></thead>
+            <tbody>
+              {r.byOwner.map(o => (
+                <tr key={o.ownerId}>
+                  <td className="fu-name">{o.name}</td>
+                  <td className="num" style={{ textAlign: 'right' }}>{o.leads}</td>
+                  <td className="num" style={{ textAlign: 'right' }}>{o.open}</td>
+                  <td className="num" style={{ textAlign: 'right' }}>{o.overdue}</td>
+                  <td className="bar-cell">
+                    <span className="brow" style={{ gridTemplateColumns: 'minmax(0,1fr) 40px' }}>
+                      <span className="track"><span style={{ width: `${(o.followups / maxFollow) * 100}%`, background: '#2B5D49' }} /></span>
+                      <b>{o.followups}</b>
+                    </span>
+                  </td>
+                  <td className="num" style={{ textAlign: 'right' }}>{o.won}</td>
+                  <td className="num" style={{ textAlign: 'right' }}>{money(o.sales)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="card">
+        <h2>แยกตามสินค้า</h2>
+        {r.byProduct.length === 0 ? <p className="desc">ยังไม่มีลูกค้าตามตัวกรองนี้</p> : (
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>สินค้า</th><th style={{ textAlign: 'right' }}>ลูกค้า</th><th style={{ textAlign: 'right' }}>ติดตามแล้ว</th><th style={{ textAlign: 'right' }}>ซื้อแล้ว</th><th style={{ textAlign: 'right' }}>ยอดขาย</th></tr></thead>
+              <tbody>
+                {r.byProduct.map(p => (
+                  <tr key={p.product}>
+                    <td>{p.product}</td>
+                    <td className="num" style={{ textAlign: 'right' }}>{p.leads}</td>
+                    <td className="num" style={{ textAlign: 'right' }}>{p.followups}</td>
+                    <td className="num" style={{ textAlign: 'right' }}>{p.won}</td>
+                    <td className="num" style={{ textAlign: 'right' }}>{money(p.sales)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <Import fu={fu} onDone={async msg => { await reload(); showToast(msg) }} />
+      {toast}
+    </section>
+  )
+}
+
+function Tile({ label, value, note, color }: { label: string; value: string; note?: string; color?: string }) {
+  return (
+    <div className="kpi">
+      <span className="label">{label}</span>
+      <span className="value" style={color ? { color } : undefined}>{value}</span>
+      {note && <span className="note">{note}</span>}
+    </div>
+  )
+}
+
+function Import({ fu, onDone }: { fu: Ready; onDone: (msg: string) => Promise<void> }) {
+  const [parsed, setParsed] = useState<{ rows: LegacyRow[]; skipped: number; file: string } | null>(null)
+  const [owners, setOwners] = useState<Record<string, string>>({})
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const admins = fu.staff.filter(s => s.active)
+  const names = parsed ? [...new Set(parsed.rows.map(r => r.ownerName))] : []
+
+  const pick = async (file: File | undefined) => {
+    setError(null)
+    setParsed(null)
+    if (!file) return
+    try {
+      const res = parseLegacyCsv(await file.text())
+      setParsed({ ...res, file: file.name })
+      const guess: Record<string, string> = {}
+      for (const n of new Set(res.rows.map(r => r.ownerName))) guess[n] = admins.find(s => s.name === n)?.userId ?? ''
+      setOwners(guess)
+    } catch (e) { setError(errText(e)) }
+  }
+
+  const go = async () => {
+    if (!parsed) return
+    setBusy(true)
+    setError(null)
+    try {
+      const n = await importLegacy(parsed.rows.map(r => ({ ...r, ownerId: owners[r.ownerName] })))
+      setParsed(null)
+      await onDone(`นำเข้า ${n} ราย (ข้ามรายที่ลิงก์แชตมีอยู่แล้ว)`)
+    } catch (e) { setError(errText(e)) } finally { setBusy(false) }
+  }
+
+  return (
+    <details className="card">
+      <summary style={{ cursor: 'pointer', fontWeight: 600 }}>นำเข้าข้อมูลจากเว็บแอปติดตามลูกค้าตัวเดิม (CSV)</summary>
+      <p className="desc">ใช้ไฟล์ที่กด "ส่งออก CSV" จากไฟล์ HYLME_Followup_WebApp.html ประวัติรอบเดิมจะนำเข้ามาด้วย ลูกค้าที่ลิงก์แชตซ้ำกับในระบบจะถูกข้าม</p>
+      <label className="field" style={{ maxWidth: 420 }}>เลือกไฟล์
+        <input type="file" accept=".csv,text/csv" onChange={e => void pick(e.target.files?.[0])} />
+      </label>
+      {parsed && (
+        <div className="stack" style={{ gap: 12 }}>
+          <p className="desc">{parsed.file}: อ่านได้ {parsed.rows.length} ราย{parsed.skipped ? ` · ข้าม ${parsed.skipped} แถวที่ข้อมูลไม่ครบ` : ''} เลือกแอดมินให้ชื่อผู้ดูแลในไฟล์เดิม</p>
+          <div className="form-grid">
+            {names.map(n => (
+              <label key={n} className="field">"{n || 'ไม่ระบุ'}" →
+                <select value={owners[n] ?? ''} onChange={e => setOwners(o => ({ ...o, [n]: e.target.value }))}>
+                  <option value="">เลือกแอดมิน</option>
+                  {admins.map(s => <option key={s.userId} value={s.userId}>{s.name}</option>)}
+                </select>
+              </label>
+            ))}
+          </div>
+          <div className="actions">
+            <button type="button" className="btn" disabled={busy || names.some(n => !owners[n]) || !parsed.rows.length} onClick={() => void go()}>
+              {busy ? 'กำลังนำเข้า…' : `นำเข้า ${parsed.rows.length} ราย`}
+            </button>
+          </div>
+        </div>
+      )}
+      {error && <p className="msg-err" role="alert">{error}</p>}
+    </details>
+  )
+}

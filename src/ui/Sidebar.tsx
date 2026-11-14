@@ -2,13 +2,15 @@ import { toBangkokIsoFromAny } from '../data/mappers'
 import type { Upload } from '../data/read'
 import { thaiDay } from './viewModel'
 
-export type Tab = 'overview' | 'follow' | 'ads' | 'quotes' | 'upload' | 'tags'
+export type Tab = 'overview' | 'follow' | 'care' | 'gm' | 'ads' | 'quotes' | 'upload' | 'tags'
 
-export const TITLES: Record<Tab, string> = { overview: 'สรุปประจำวัน', follow: 'ต้องตามวันนี้', ads: 'โฆษณา', quotes: 'เสียงลูกค้า', upload: 'อัปโหลดไฟล์', tags: 'จัดกลุ่มแท็ก' }
+export const TITLES: Record<Tab, string> = { overview: 'สรุปประจำวัน', follow: 'ต้องตามวันนี้', care: 'ติดตาม 7 รอบ', gm: 'รายงาน GM', ads: 'โฆษณา', quotes: 'เสียงลูกค้า', upload: 'อัปโหลดไฟล์', tags: 'จัดกลุ่มแท็ก' }
 
 const ICONS: Record<Tab, React.ReactNode> = {
   overview: <><rect x="3.5" y="3.5" width="7" height="9" rx="1.5" /><rect x="13.5" y="3.5" width="7" height="5" rx="1.5" /><rect x="13.5" y="11.5" width="7" height="9" rx="1.5" /><rect x="3.5" y="15.5" width="7" height="5" rx="1.5" /></>,
   follow: <><path d="M21 12a8.5 8.5 0 0 1-12.4 7.6L3.5 21l1.4-4.9A8.5 8.5 0 1 1 21 12z" /><path d="M12 8v4l2.5 1.5" /></>,
+  care: <><rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M3.5 9.5h17" /><path d="M8 3v4" /><path d="M16 3v4" /><path d="m8.5 14.5 2.3 2.3 4.7-4.6" /></>,
+  gm: <><path d="M4 20V10" /><path d="M10 20V4" /><path d="M16 20v-7" /><path d="M21 20H3" /></>,
   ads: <><path d="M4 10v4a1 1 0 0 0 1 1h2l6 4V5L7 9H5a1 1 0 0 0-1 1z" /><path d="M17 9a4 4 0 0 1 0 6" /><path d="M19.5 6.5a7.5 7.5 0 0 1 0 11" /></>,
   quotes: <><path d="M4.5 5.5h15a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-9l-4.5 3.5v-3.5h-1.5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1z" /><path d="M8.5 10h7" /><path d="M8.5 13h4" /></>,
   upload: <><path d="M12 15V4" /><path d="M7.5 8.5 12 4l4.5 4.5" /><path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15" /></>,
@@ -27,8 +29,8 @@ function pagesCovering(uploads: Upload[], kind: Upload['kind'], day: string): nu
   return ids.size
 }
 
-export function Sidebar({ tab, setTab, followCount, unassigned, latest, uploads }: {
-  tab: Tab; setTab: (t: Tab) => void; followCount: number; unassigned: number; latest: string | null; uploads: Upload[]
+export function Sidebar({ tab, setTab, followCount, careCount, showGm, unassigned, latest, uploads }: {
+  tab: Tab; setTab: (t: Tab) => void; followCount: number; careCount: number | null; showGm: boolean; unassigned: number; latest: string | null; uploads: Upload[]
 }) {
   const item = (key: Tab, extra?: React.ReactNode) => (
     <button type="button" aria-current={tab === key ? 'page' : undefined} onClick={() => setTab(key)}>
@@ -48,6 +50,8 @@ export function Sidebar({ tab, setTab, followCount, unassigned, latest, uploads 
       <nav className="nav" aria-label="เมนูหลัก">
         {item('overview')}
         {item('follow', followCount > 0 && <span className="pill-count" style={{ background: '#F2C9B3', color: '#6E260A' }}>{followCount}</span>)}
+        {item('care', careCount ? <span className="pill-count" style={{ background: '#F3DDAE', color: '#5C3A06' }}>{careCount}</span> : null)}
+        {showGm && item('gm')}
         {item('ads')}
         {item('quotes')}
         {item('upload')}

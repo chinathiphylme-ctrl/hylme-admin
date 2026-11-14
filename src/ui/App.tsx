@@ -10,6 +10,11 @@ import { addDays, rangeFor, type DateRange, type RangeKey } from '../metrics/ran
 import type { ConvRow, OrderRow, TagRow } from '../parse/types'
 import { FilterBar } from './FilterBar'
 import { Follow } from './Follow'
+import { Care } from './followup/Care'
+import { Gate } from './followup/Login'
+import { Report } from './followup/Report'
+import { useFollowup } from './followup/useFollowup'
+import { bangkokToday, queue } from '../followup/schedule'
 import { Overview } from './Overview'
 import { Ads } from './Ads'
 import { Quotes } from './Quotes'
@@ -45,6 +50,11 @@ export function App() {
   const [version, setVersion] = useState(0)
 
   const reload = useCallback(() => setVersion(v => v + 1), [])
+  const fu = useFollowup()
+  // due today + overdue, for the sidebar badge
+  const careCount = useMemo(
+    () => (fu.status === 'ready' ? queue(fu.leads, fu.events, bangkokToday()).filter(r => r.state !== 'waiting').length : null),
+    [fu])
 
   useEffect(() => {
     let live = true
@@ -102,7 +112,12 @@ export function App() {
   }
 
   let body: React.ReactNode
-  if (error) {
+  if (tab === 'care' || tab === 'gm') {
+    // the follow-up tabs have their own data and sign-in, so they work even when the dashboard data fails
+    body = fu.status !== 'ready' ? <Gate fu={fu} />
+      : tab === 'care' ? <Care fu={fu} reload={fu.reload} signOut={fu.signOut} />
+        : <Report fu={fu} reload={fu.reload} />
+  } else if (error) {
     body = (
       <section className="card">
         <h2>โหลดข้อมูลไม่ได้ ลองรีเฟรช</h2>
@@ -134,12 +149,13 @@ export function App() {
 
   return (
     <div className="shell">
-      <Sidebar tab={tab} setTab={goTab} followCount={follow.length} unassigned={unassigned} latest={latest} uploads={base?.uploads ?? []} />
+      <Sidebar tab={tab} setTab={goTab} followCount={follow.length} careCount={careCount}
+        showGm={fu.status === 'ready' && fu.me.role === 'gm'} unassigned={unassigned} latest={latest} uploads={base?.uploads ?? []} />
       <main className="main">
         <header className="head">
           <div className="head-top">
             <div className="stack" style={{ gap: 2 }}>
-              <span className="sub">{latest ? `ข้อมูลล่าสุด ${thaiDayLong(latest)}` : 'Hylme แอดมินรายวัน'}</span>
+              <span className="sub">{tab === 'care' || tab === 'gm' ? thaiDayLong(bangkokToday()) : latest ? `ข้อมูลล่าสุด ${thaiDayLong(latest)}` : 'Hylme แอดมินรายวัน'}</span>
               <h1>{TITLES[tab]}</h1>
             </div>
           </div>
