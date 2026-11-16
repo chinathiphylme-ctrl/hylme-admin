@@ -2,7 +2,6 @@
 -- code) and every load of the follow-up tabs (team sign-in) runs fu_sync_core(), which reads conversations and
 -- conv_tag_seen and writes fu_leads / fu_events. It never stores customer names, phones or message text.
 -- Rules: docs/superpowers/specs/2026-11-16-followup-auto-intake-design.md
-begin;
 
 alter table fu_leads add column conversation_id text;
 alter table fu_leads add column source text not null default 'manual' check (source in ('manual', 'tag'));
@@ -214,4 +213,3 @@ revoke execute on function fu_follow_no(text), fu_tag_day(text, text), fu_is_pro
 grant execute on function fu_sync_upload(text) to anon, authenticated;
 grant execute on function fu_sync_team() to authenticated;
 
-commit;
