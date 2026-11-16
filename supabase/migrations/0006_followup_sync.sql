@@ -56,7 +56,7 @@ language plpgsql security definer set search_path = public as $$
 declare
   n_added int := 0; n_linked int := 0; n_rounds int := 0; n_skipped int := 0; n_won int := 0;
   c record; v_day date; v_cands uuid[]; v_owner uuid; v_product text; v_page text; v_url text; v_id uuid;
-  new_ids uuid[] := '{}';
+  new_ids uuid[] := '{}'; v_touched uuid[];
 begin
   -- two uploads or two open tabs at once must not add the same chat twice
   perform pg_advisory_xact_lock(hashtext('fu_sync'));
@@ -126,6 +126,44 @@ begin
     n_added := n_added + 1;
   end loop;
 
+  -- ติดตามN = rounds 1..N done, dated the day the earliest tag implying each round appeared; rounds the team
+  -- recorded themselves stay as they are. The version bump makes an open screen reload instead of colliding.
+  with t as (
+    select l.id, l.first_day, fu_follow_no(s.tag) as n, fu_tag_day(s.conversation_id, s.tag) as td
+    from fu_leads l join conv_tag_seen s on s.conversation_id = l.conversation_id
+    where l.status = 'active' and fu_follow_no(s.tag) > 0),
+  r as (
+    select distinct on (t.id, g.r) t.id, t.first_day, g.r, t.td
+    from t cross join lateral generate_series(1, t.n) as g(r)
+    order by t.id, g.r, t.td nulls last),
+  ins as (
+    insert into fu_events (lead_id, kind, round_no, result, due_day, at)
+    select id, 'round', r, 'tag', fu_due_day(first_day, r), coalesce((td + time '12:00') at time zone 'Asia/Bangkok', now())
+    from r
+    on conflict (lead_id, round_no) where kind in ('round', 'skip') do nothing
+    returning lead_id)
+  select count(*), coalesce(array_agg(distinct lead_id), '{}') into n_rounds, v_touched from ins;
+  update fu_leads set version = version + 1, updated_at = now() where id = any (v_touched);
+
+  -- only for customers added just now: rounds already past are skipped, so the queue does not open full of red
+  insert into fu_events (lead_id, kind, round_no, due_day, note)
+  select l.id, 'skip', g.r, fu_due_day(l.first_day, g.r), 'เข้าระบบทีหลัง'
+  from fu_leads l cross join generate_series(1, 7) as g(r)
+  where l.id = any (new_ids) and fu_due_day(l.first_day, g.r) < fu_bkk_today()
+  on conflict (lead_id, round_no) where kind in ('round', 'skip') do nothing;
+  get diagnostics n_skipped = row_count;
+
+  -- a close tag first seen after the customer entered the queue = bought (the order number is added by hand)
+  with w as (
+    update fu_leads l set status = 'won', version = version + 1, updated_at = now()
+    where l.status = 'active' and l.conversation_id is not null
+      and exists (select 1 from conv_tag_seen s
+                  where s.conversation_id = l.conversation_id and btrim(s.tag) in ('ปิด', 'ปิดAds', 'ปิดOrganic')
+                    and not s.baseline and s.first_day > l.first_day)
+    returning l.id)
+  insert into fu_events (lead_id, kind, result, note) select id, 'status', 'won', 'จากแท็กปิดใน Pancake' from w;
+  get diagnostics n_won = row_count;
+
   return jsonb_build_object('added', n_added, 'linked', n_linked, 'rounds', n_rounds, 'skipped', n_skipped, 'won', n_won);
 end $$;
 
@@ -144,6 +182,18 @@ begin
   if auth.uid() is null then raise exception 'กรุณาเข้าสู่ระบบก่อน'; end if;
   if not fu_member() then raise exception 'บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้ระบบติดตาม ติดต่อเจ้าของระบบ'; end if;
   return fu_sync_core();
+end $$;
+
+-- deleting a customer that came from a chat remembers the chat, so the sync does not bring it back
+-- (create or replace keeps the grant from 0005)
+create or replace function fu_delete_lead(p_actor uuid, p_lead uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform fu_actor(p_actor);
+  insert into fu_sync_ignored (conversation_id)
+  select conversation_id from fu_leads where id = p_lead and conversation_id is not null
+  on conflict do nothing;
+  delete from fu_leads where id = p_lead;
 end $$;
 
 -- only the functions created here; functions from earlier migrations and other apps keep their grants

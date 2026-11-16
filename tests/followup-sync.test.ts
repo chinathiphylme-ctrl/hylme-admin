@@ -190,3 +190,103 @@ describe('auto intake from the ติดตาม tag', () => {
     expect((await team<{ r: Counts }>('select fu_sync_team() as r'))[0].r).toMatchObject({ added: 0 })
   })
 })
+
+describe('later syncs read the tags', () => {
+  const only = async (conv: string) => (await leads()).find(l => l.conversation_id === conv)!
+  const setStatus = (id: string, v: number, status: string) =>
+    team('select fu_set_status($1, $2, $3, $4, $5, $6)', [KOY, id, v, status, '', null])
+
+  it('ติดตามN marks rounds 1..N done', async () => {
+    await chat('r3', day(0), ['ติดตาม3'])
+    expect(await sync()).toMatchObject({ added: 1, rounds: 3, skipped: 0 })
+    const l = await only('r3')
+    const due = await q<{ r: number; d: string }>(`select r, to_char(fu_due_day($1::date, r), 'YYYY-MM-DD') d from generate_series(1, 3) r`, [l.first_day])
+    const rounds = (await events(l.id)).filter(e => e.kind === 'round')
+    expect(rounds.map(e => [e.round_no, e.result, e.by, e.due_day, e.at_day])).toEqual(due.map(x => [x.r, 'tag', null, x.d, day(0)]))
+  })
+
+  it('a later ติดตามN fills only the empty rounds', async () => {
+    await chat('f1', day(-1), ['ติดตาม'])
+    await sync()
+    const l = await only('f1')
+    await team('select fu_record_round($1, $2, $3, 1, $4, $5, null)', [KOY, l.id, l.version, 'sent', 'ทักแล้ว'])
+    await chat('f1', day(0), ['ติดตาม', 'ติดตาม2'])
+    expect(await sync()).toMatchObject({ rounds: 1 })
+    const rounds = (await events(l.id)).filter(e => e.kind === 'round')
+    expect(rounds.map(e => [e.round_no, e.result, e.by])).toEqual([[1, 'sent', KOY], [2, 'tag', null]])
+  })
+
+  it('late entry skips past-due rounds once', async () => {
+    await chat('l1', day(-10), ['ติดตาม'])
+    expect(await sync()).toMatchObject({ added: 1, skipped: 3 })
+    const l = await only('l1')
+    const skips = (await events(l.id)).filter(e => e.kind === 'skip')
+    expect(skips.map(e => [e.round_no, e.note, e.by])).toEqual([[1, 'เข้าระบบทีหลัง', null], [2, 'เข้าระบบทีหลัง', null], [3, 'เข้าระบบทีหลัง', null]])
+    expect(await sync()).toMatchObject({ skipped: 0 })
+    // a customer already in the queue whose round becomes overdue stays overdue
+    await chat('l2', day(0), ['ติดตาม'])
+    await sync()
+    await pg.query(`update fu_leads set first_day = $1 where conversation_id = 'l2'`, [day(-5)])
+    expect(await sync()).toMatchObject({ skipped: 0 })
+    expect((await events((await only('l2')).id)).filter(e => e.kind === 'skip')).toEqual([])
+  })
+
+  it('close tag after intake marks bought', async () => {
+    await chat('w1', day(-2), ['ติดตาม'])
+    await sync()
+    const before = await only('w1')
+    await chat('w1', day(0), ['ติดตาม', 'ปิดAds'])
+    expect(await sync()).toMatchObject({ won: 1 })
+    const after = await only('w1')
+    expect(after).toMatchObject({ status: 'won', version: before.version + 1 })
+    const st = (await events(after.id)).filter(e => e.kind === 'status')
+    expect(st).toEqual([expect.objectContaining({ result: 'won', note: 'จากแท็กปิดใน Pancake', by: null })])
+    expect(await sync()).toMatchObject({ won: 0 })
+    expect((await events(after.id)).filter(e => e.kind === 'status')).toHaveLength(1)
+  })
+
+  it('manual bought or stopped is left alone', async () => {
+    await chat('m1', day(-2), ['ติดตาม'])
+    await chat('m2', day(-2), ['ติดตาม'])
+    await sync()
+    const a = await only('m1'), b = await only('m2')
+    await setStatus(a.id, a.version, 'won')
+    await setStatus(b.id, b.version, 'optout')
+    const va = (await only('m1')).version, vb = (await only('m2')).version
+    await chat('m1', day(0), ['ติดตาม', 'ปิด'])
+    await chat('m2', day(0), ['ติดตาม', 'ปิด'])
+    expect(await sync()).toMatchObject({ won: 0 })
+    expect([(await only('m1')).version, (await only('m2')).version]).toEqual([va, vb])
+    expect((await only('m2')).status).toBe('optout')
+  })
+
+  it('later syncs never overwrite edits', async () => {
+    await chat('e1', day(-1), ['ติดตาม', 'มะกอก', 'พี่ก้อย'])
+    await sync()
+    const l = await only('e1')
+    await team(`select fu_save_lead($1, $2, $3, 'คุณเอ', 'Gluta', $4, $5, $6, $7, '', '')`, [KOY, l.id, l.version, NOON, l.first_day, FB, l.chat_url])
+    await chat('e1', day(0), ['ติดตาม', 'ติดตาม2', 'Magnesium', 'พี่ก้อย'])
+    await sync()
+    expect(await only('e1')).toMatchObject({ name: 'คุณเอ', product: 'Gluta', owner_id: NOON, first_day: day(-1) })
+  })
+
+  it('deleted customers do not come back', async () => {
+    await chat('d1', day(0), ['ติดตาม'])
+    await sync()
+    await team('select fu_delete_lead($1, $2)', [KOY, (await only('d1')).id])
+    expect(await sync()).toMatchObject({ added: 0 })
+    expect(await q('select conversation_id from fu_sync_ignored')).toEqual([{ conversation_id: 'd1' }])
+    const m = await manual(KOY, 'ไม่มีแชท', '')
+    await team('select fu_delete_lead($1, $2)', [KOY, m])
+    expect(await q('select conversation_id from fu_sync_ignored')).toHaveLength(1)
+  })
+
+  it('inactive leads get no tag rounds', async () => {
+    await chat('p1', day(-1), ['ติดตาม'])
+    await sync()
+    await pg.query(`update fu_leads set status = 'paused' where conversation_id = 'p1'`)
+    await chat('p1', day(0), ['ติดตาม', 'ติดตาม2'])
+    expect(await sync()).toMatchObject({ rounds: 0 })
+    expect((await events((await only('p1')).id)).filter(e => e.kind === 'round')).toEqual([])
+  })
+})
