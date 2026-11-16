@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  fetchFollowup, fetchOrdersByIds, getActor, isTeamMember, onAuthChange, sessionUserId, setActor, signOut, type FollowupData,
+  fetchFollowup, fetchOrdersByIds, syncFromTags, getActor, isTeamMember, onAuthChange, sessionUserId, setActor, signOut, type FollowupData,
 } from '../../data/followup'
 import type { Staff } from '../../followup/report'
 import type { OrderRow } from '../../parse/types'
@@ -27,6 +27,8 @@ export function useFollowup(): Followup {
     try {
       if (!(await sessionUserId())) { setState({ status: 'signedOut' }); return }
       if (!(await isTeamMember())) { setState({ status: 'noTeam' }); return }
+      // pick up chats tagged ติดตาม since the last upload; a failed sync must not keep the team out of the tab
+      await syncFromTags().catch(() => null)
       const data = await fetchFollowup()
       const me = data.staff.find(s => s.id === getActor() && s.active)
       if (!me) { setState({ status: 'pickName', staff: data.staff }); return }

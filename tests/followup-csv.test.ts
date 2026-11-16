@@ -4,7 +4,7 @@ import type { FuLead } from '../src/followup/schedule'
 
 const lead: FuLead = {
   id: 'L1', name: '=HYPERLINK("x")', product: 'GABA', ownerId: 'u1', firstDay: '2026-11-13', pageId: '516356078238016',
-  chatUrl: 'https://pancake.vn/c/1', objection: 'ราคา / ความคุ้มค่า', notes: 'บรรทัด 1\n"อ้าง"', status: 'active', version: 3, createdAt: '', updatedAt: '',
+  chatUrl: 'https://pancake.vn/c/1', objection: 'ราคา / ความคุ้มค่า', notes: 'บรรทัด 1\n"อ้าง"', status: 'active', version: 3, createdAt: '', updatedAt: '', conversationId: null, source: 'manual',
 }
 
 describe('csv', () => {

@@ -3,7 +3,7 @@ import { pageName } from '../../config/pages'
 import { deleteLead, linkOrder, recordRound, setStatus, skipRound, unlinkOrder } from '../../data/followup'
 import { orderLive, type OrderLink, type Staff } from '../../followup/report'
 import {
-  bangkokToday, dueDay, GOALS, nextRound, OFFSETS, RESULT_LABEL, ROUNDS, STATUS_LABEL, stateOf,
+  bangkokToday, dueDay, eventBy, GOALS, nextRound, OFFSETS, RESULT_LABEL, ROUNDS, STATUS_LABEL, stateOf,
   type FuEvent, type FuLead, type LeadStatus, type RoundResult,
 } from '../../followup/schedule'
 import type { OrderRow } from '../../parse/types'
@@ -72,8 +72,8 @@ export function LeadDrawer({ lead, events, links, orders, staff, onClose, onEdit
                 <time dateTime={e.at}>{thaiDay(t.day)} {t.time}</time>
                 <div>
                   <div>{describe(e)}</div>
-                  {e.note && e.kind !== 'edit' && e.kind !== 'reassign' && e.kind !== 'order' && <div style={{ whiteSpace: 'pre-wrap' }}>{e.note}</div>}
-                  <div className="who">โดย {nameOf(e.by)}</div>
+                  {e.note && e.kind !== 'edit' && e.kind !== 'reassign' && e.kind !== 'order' && e.kind !== 'auto' && <div style={{ whiteSpace: 'pre-wrap' }}>{e.note}</div>}
+                  <div className="who">โดย {eventBy(e.by, staff)}</div>
                 </div>
               </li>
             )
@@ -97,6 +97,7 @@ function describe(e: FuEvent): string {
   switch (e.kind) {
     case 'create': return 'เพิ่มลูกค้าเข้าระบบ'
     case 'import': return 'นำเข้าจากเว็บแอปเดิม'
+    case 'auto': return 'เข้าคิวอัตโนมัติจากแท็กติดตาม'
     case 'round': return `รอบ ${e.roundNo} · ${RESULT_LABEL[e.result ?? ''] ?? e.result}${e.orderId ? ` · ออเดอร์ ${e.orderId}` : ''}`
     case 'skip': return `ข้ามรอบ ${e.roundNo}`
     case 'status': return `เปลี่ยนสถานะเป็น ${STATUS_LABEL[e.result as LeadStatus] ?? e.result}${e.orderId ? ` · ออเดอร์ ${e.orderId}` : ''}`

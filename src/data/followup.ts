@@ -29,6 +29,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
 export type DbLead = {
   id: string; name: string; product: string; owner_id: string; first_day: string; page_id: string | null; chat_url: string
   objection: string; notes: string; status: LeadStatus; version: number; created_at: string; updated_at: string
+  conversation_id: string | null; source: 'manual' | 'tag'
 }
 export type DbEvent = {
   id: number; lead_id: string; kind: FuEvent['kind']; round_no: number | null; result: string | null; due_day: string | null
@@ -38,6 +39,7 @@ export type DbEvent = {
 export const fromDbLead = (r: DbLead): FuLead => ({
   id: r.id, name: r.name, product: r.product, ownerId: r.owner_id, firstDay: r.first_day, pageId: r.page_id as PageId | null,
   chatUrl: r.chat_url, objection: r.objection, notes: r.notes, status: r.status, version: r.version, createdAt: r.created_at, updatedAt: r.updated_at,
+  conversationId: r.conversation_id, source: r.source,
 })
 export const fromDbEvent = (r: DbEvent): FuEvent => ({
   id: Number(r.id), leadId: r.lead_id, kind: r.kind, roundNo: r.round_no, result: r.result, dueDay: r.due_day, note: r.note,
@@ -100,7 +102,7 @@ export type FollowupData = { staff: Staff[]; leads: FuLead[]; events: FuEvent[];
 export async function fetchFollowup(): Promise<FollowupData> {
   const [staff, leads, events, links] = await Promise.all([
     all<{ id: string; name: string; role: Role; active: boolean }>('staff', 'id,name,role,active', 'name'),
-    all<DbLead>('fu_leads', 'id,name,product,owner_id,first_day,page_id,chat_url,objection,notes,status,version,created_at,updated_at', 'first_day'),
+    all<DbLead>('fu_leads', 'id,name,product,owner_id,first_day,page_id,chat_url,objection,notes,status,version,created_at,updated_at,conversation_id,source', 'first_day'),
     all<DbEvent>('fu_events', 'id,lead_id,kind,round_no,result,due_day,note,order_id,at,by', 'id'),
     all<{ order_id: string; lead_id: string; linked_at: string; linked_by: string | null }>('fu_orders', 'order_id,lead_id,linked_at,linked_by', 'linked_at'),
   ])
@@ -123,6 +125,12 @@ export async function fetchOrdersByIds(ids: string[]): Promise<OrderRow[]> {
   }
   return out
 }
+
+// ---- chats tagged ติดตาม in Pancake enter the queue on the server ----
+
+export type SyncResult = { added: number; linked: number; rounds: number; skipped: number; won: number }
+
+export const syncFromTags = () => rpc<SyncResult>('fu_sync_team', {})
 
 // ---- writes ----
 

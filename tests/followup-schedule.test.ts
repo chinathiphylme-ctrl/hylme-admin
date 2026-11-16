@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  bangkokToday, dueDay, nextRound, queue, stateOf, type FuEvent, type FuLead,
+  bangkokToday, dueDay, eventBy, nextRound, queue, RESULT_LABEL, stateOf, type FuEvent, type FuLead,
 } from '../src/followup/schedule'
 
 const lead = (o: Partial<FuLead> = {}): FuLead => ({
   id: 'L1', name: 'ลูกค้า ก', product: 'EVOO 250 มล.', ownerId: 'u1', firstDay: '2026-11-13', pageId: null,
-  chatUrl: '', objection: '', notes: '', status: 'active', version: 1, createdAt: '', updatedAt: '', ...o,
+  chatUrl: '', objection: '', notes: '', status: 'active', version: 1, createdAt: '', updatedAt: '', conversationId: null, source: 'manual', ...o,
 })
 const ev = (roundNo: number, kind: FuEvent['kind'] = 'round', leadId = 'L1'): FuEvent => ({
   id: roundNo, leadId, kind, roundNo, result: kind === 'round' ? 'sent' : null, dueDay: null, note: '', orderId: null,
@@ -73,5 +73,19 @@ describe('bangkok today', () => {
   it('uses Thai time, not the device clock', () => {
     expect(bangkokToday(new Date('2026-11-13T17:30:00Z'))).toBe('2026-11-14')
     expect(bangkokToday(new Date('2026-11-13T16:59:00Z'))).toBe('2026-11-13')
+  })
+})
+
+describe('entries the system made', () => {
+  const staff = [{ id: 'u1', name: 'พี่ก้อย', role: 'admin' as const, active: true }]
+  it('names who recorded an entry, or ระบบ when nobody did', () => {
+    expect(eventBy(null, staff)).toBe('ระบบ')
+    expect(eventBy('u1', staff)).toBe('พี่ก้อย')
+    expect(eventBy('x', staff)).toBe('—')
+  })
+  it('labels rounds read from Pancake tags and counts them as done', () => {
+    expect(RESULT_LABEL.tag).toBe('ทำแล้ว (จากแท็ก Pancake)')
+    const fromTag: FuEvent = { ...ev(1), result: 'tag', by: null }
+    expect(nextRound([fromTag])).toBe(2)
   })
 })

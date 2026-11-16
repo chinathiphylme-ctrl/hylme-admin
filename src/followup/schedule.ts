@@ -15,12 +15,12 @@ export const GOALS = [
 ]
 
 export type LeadStatus = 'active' | 'won' | 'optout' | 'paused'
-export type EventKind = 'create' | 'edit' | 'round' | 'skip' | 'status' | 'reassign' | 'order' | 'import'
+export type EventKind = 'create' | 'edit' | 'round' | 'skip' | 'status' | 'reassign' | 'order' | 'import' | 'auto'
 export type RoundResult = 'sent' | 'waiting' | 'won' | 'optout'
 export type State = 'won' | 'optout' | 'paused' | 'completed' | 'overdue' | 'due' | 'waiting'
 
 export const RESULT_LABEL: Record<string, string> = {
-  sent: 'ส่งข้อมูลแล้ว', waiting: 'รอลูกค้าตอบ', won: 'ซื้อแล้ว', optout: 'ขอหยุดติดต่อ', legacy: 'บันทึกจากระบบเดิม',
+  sent: 'ส่งข้อมูลแล้ว', waiting: 'รอลูกค้าตอบ', won: 'ซื้อแล้ว', optout: 'ขอหยุดติดต่อ', legacy: 'บันทึกจากระบบเดิม', tag: 'ทำแล้ว (จากแท็ก Pancake)',
 }
 export const STATUS_LABEL: Record<LeadStatus, string> = {
   active: 'กำลังติดตาม', won: 'ซื้อแล้ว', optout: 'หยุดติดต่อ', paused: 'พักติดตาม',
@@ -33,12 +33,17 @@ export const STATE_LABEL: Record<State, string> = {
 export type FuLead = {
   id: string; name: string; product: string; ownerId: string; firstDay: string; pageId: PageId | null
   chatUrl: string; objection: string; notes: string; status: LeadStatus; version: number; createdAt: string; updatedAt: string
+  conversationId: string | null; source: 'manual' | 'tag' // 'tag' = added by the sync from a chat tagged ติดตาม
 }
 
 export type FuEvent = {
   id: number; leadId: string; kind: EventKind; roundNo: number | null; result: string | null; dueDay: string | null
   note: string; orderId: string | null; at: string; by: string | null
 }
+
+// entries written by the sync from Pancake tags have no person
+export const eventBy = (by: string | null, staff: { id: string; name: string }[]) =>
+  by === null ? 'ระบบ' : staff.find(s => s.id === by)?.name ?? '—'
 
 export const dueDay = (firstDay: string, round: number) => addDays(firstDay, OFFSETS[round - 1] - 1)
 

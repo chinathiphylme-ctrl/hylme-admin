@@ -10,7 +10,7 @@ const staff = [
 ]
 const lead = (id: string, o: Partial<FuLead> = {}): FuLead => ({
   id, name: id, product: 'EVOO 250 มล.', ownerId: 'u1', firstDay: '2026-11-10', pageId: '516356078238016',
-  chatUrl: '', objection: '', notes: '', status: 'active', version: 1, createdAt: '', updatedAt: '', ...o,
+  chatUrl: '', objection: '', notes: '', status: 'active', version: 1, createdAt: '', updatedAt: '', conversationId: null, source: 'manual', ...o,
 })
 let n = 0
 const ev = (leadId: string, at: string, o: Partial<FuEvent> = {}): FuEvent => ({
