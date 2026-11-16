@@ -70,6 +70,11 @@ describe('GM report', () => {
     expect(report(base, { ...all, from: '2026-11-12', to: '2026-11-12' })).toMatchObject({ followups: 0, skips: 1, won: 0, sales: 0 })
   })
 
+  it('leaves out rounds the system skipped when a chat entered the queue late', () => {
+    const late = [...events, ev('b', '2026-11-12T02:00:00Z', { kind: 'skip', result: null, note: 'เข้าระบบทีหลัง', by: null })]
+    expect(report({ leads, events: late, links, orders, staff, today: '2026-11-17' }, all).skips).toBe(1)
+  })
+
   it('treats cancelled and returned orders as not sold', () => {
     expect(orderLive(order('x', '2026-11-01', 1, 'ยกเลิก'))).toBe(false)
     expect(orderLive(order('x', '2026-11-01', 1, 'ตีกลับ'))).toBe(false)

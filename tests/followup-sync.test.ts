@@ -121,7 +121,6 @@ describe('auto intake from the ติดตาม tag', () => {
   it('ignores chats without a follow tag and tags like ติดตามลูกค้า', async () => {
     await chat('n1', day(0), ['มะกอก', 'พี่ก้อย'])
     await chat('n2', day(0), ['ติดตามลูกค้า'])
-    await chat('n3', day(0), [' ติดตาม8'])
     expect(await sync()).toMatchObject({ added: 0 })
     expect(await leads()).toEqual([])
   })
@@ -179,6 +178,28 @@ describe('auto intake from the ติดตาม tag', () => {
     const all = await leads()
     expect(all).toHaveLength(1)
     expect(all[0]).toMatchObject({ id, conversation_id: 'c9', source: 'manual' })
+  })
+
+  it('two chat links of one chat on two manual customers link only one and never break the sync', async () => {
+    await manual(KOY, 'ลิงก์เก่า', 'https://pancake.vn/old/cx')
+    await manual(NOON, 'ลิงก์ใหม่', 'https://pancake.vn/new/cx')
+    await chat('cx', day(-1), ['ติดตาม'], { url: 'https://pancake.vn/old/cx' })
+    await chat('cx', day(0), ['ติดตาม'], { url: 'https://pancake.vn/new/cx' })
+    expect(await sync()).toMatchObject({ added: 0, linked: 1 })
+    expect((await leads()).filter(l => l.conversation_id === 'cx')).toHaveLength(1)
+    expect(await sync()).toMatchObject({ added: 0, linked: 0 })
+  })
+
+  it('a chat link that is not http(s) is not copied', async () => {
+    await chat('u1', day(0), ['ติดตาม'], { url: 'javascript:alert(1)' })
+    await sync()
+    expect((await leads())[0].chat_url).toBe('')
+  })
+
+  it('trims spaces around product tags', async () => {
+    await chat('sp1', day(0), ['ติดตาม', ' มะกอก '])
+    await sync()
+    expect((await leads())[0].product).toBe('มะกอก')
   })
 
   it('entry points check who calls', async () => {
@@ -279,6 +300,36 @@ describe('later syncs read the tags', () => {
     const m = await manual(KOY, 'ไม่มีแชท', '')
     await team('select fu_delete_lead($1, $2)', [KOY, m])
     expect(await q('select conversation_id from fu_sync_ignored')).toHaveLength(1)
+  })
+
+  it('ติดตามN above 7 counts as 7, and ติดตาม1 as round 1', async () => {
+    await chat('n8', day(0), ['ติดตาม8'])
+    await chat('n1', day(0), ['ติดตาม1'])
+    await sync()
+    const rounds = async (c: string) => (await events((await only(c)).id)).filter(e => e.kind === 'round').map(e => e.round_no)
+    expect(await rounds('n8')).toEqual([1, 2, 3, 4, 5, 6, 7])
+    expect(await rounds('n1')).toEqual([1])
+  })
+
+  it('a customer reopened after an automatic bought stays open', async () => {
+    await chat('ro', day(-3), ['ติดตาม'])
+    await sync()
+    await chat('ro', day(-1), ['ติดตาม', 'ปิด'])
+    await sync()
+    const won = await only('ro')
+    expect(won.status).toBe('won')
+    await team('select fu_set_status($1, $2, $3, $4, $5, $6)', [KOY, won.id, won.version, 'active', 'ลูกค้าทักกลับมา', null])
+    expect(await sync()).toMatchObject({ won: 0 })
+    expect((await only('ro')).status).toBe('active')
+  })
+
+  it('an automatic bought is dated the day the close tag appeared', async () => {
+    await chat('wd', day(-3), ['ติดตาม'])
+    await sync()
+    await chat('wd', day(-1), ['ติดตาม', 'ปิดAds'])
+    await sync()
+    const st = (await events((await only('wd')).id)).filter(e => e.kind === 'status')
+    expect(st.map(e => e.at_day)).toEqual([day(-1)])
   })
 
   it('inactive leads get no tag rounds', async () => {

@@ -55,7 +55,8 @@ export function report(
     if (st === 'due') total.dueToday++
     if (st === 'overdue') total.overdue++
     total.followups += followups
-    total.skips += ranged.filter(e => e.kind === 'skip').length
+    // skips the sync made for a chat that entered late are nobody's work
+    total.skips += ranged.filter(e => e.kind === 'skip' && e.by !== null).length
     total.won += won
     total.sales += sales
     for (const [map, key] of [[owners, l.ownerId], [products, l.product]] as const) {

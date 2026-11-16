@@ -20,11 +20,12 @@ create table fu_sync_ignored (
 alter table fu_sync_ignored enable row level security;
 revoke all on fu_sync_ignored from anon, authenticated;
 
--- ติดตาม = in the queue, ติดตามN (2..7) = rounds 1..N done; anything else is not a follow tag
+-- ติดตาม = in the queue, ติดตามN = rounds 1..N done (above 7 counts as 7); anything else is not a follow tag
 create function fu_follow_no(p_tag text) returns int
 language sql immutable as $$
   select case when btrim(p_tag) = 'ติดตาม' then 0
-              when btrim(p_tag) ~ '^ติดตาม[2-7]$' then right(btrim(p_tag), 1)::int end
+              when btrim(p_tag) ~ '^ติดตาม[1-9][0-9]*$'
+                then least(substring(btrim(p_tag) from '^ติดตาม([0-9]+)$')::numeric, 7)::int end
 $$;
 
 -- the day a tag was first seen on a chat; a baseline tag (date unknown) falls back to the first export carrying it
@@ -38,8 +39,8 @@ $$;
 -- product tags as in src/grouping/rules.ts, unless the team regrouped them on the web
 create function fu_is_product(p_tag text) returns boolean
 language sql stable security definer set search_path = public as $$
-  select coalesce((select grp = 'สินค้า' from tag_groups where tag = p_tag),
-                  p_tag in ('มะกอก', 'เดลี่ ออยล์', 'Gluta', 'Magnesium'))
+  select coalesce((select grp = 'สินค้า' from tag_groups where btrim(tag) = btrim(p_tag) order by tag limit 1),
+                  btrim(p_tag) in ('มะกอก', 'เดลี่ ออยล์', 'Gluta', 'Magnesium'))
 $$;
 
 -- copy of src/config/pages.ts
@@ -62,12 +63,14 @@ begin
   perform pg_advisory_xact_lock(hashtext('fu_sync'));
 
   -- customers added by hand whose chat link is a chat we have: link them instead of adding a second one
-  with m as (
-    select distinct on (l.id) l.id, cv.conversation_id
+  -- one chat per customer and one customer per chat (a chat's link can change between exports)
+  with pairs as (
+    select l.id, l.created_at, cv.conversation_id, cv.day
     from fu_leads l join conversations cv on cv.pancake_url = l.chat_url
     where l.conversation_id is null and l.chat_url <> ''
-      and not exists (select 1 from fu_leads o where o.conversation_id = cv.conversation_id)
-    order by l.id, cv.day desc)
+      and not exists (select 1 from fu_leads o where o.conversation_id = cv.conversation_id)),
+  per_lead as (select distinct on (id) id, created_at, conversation_id from pairs order by id, day desc),
+  m as (select distinct on (conversation_id) id, conversation_id from per_lead order by conversation_id, created_at, id)
   update fu_leads l set conversation_id = m.conversation_id from m where l.id = m.id;
   get diagnostics n_linked = row_count;
 
@@ -103,7 +106,7 @@ begin
     limit 1;
     continue when v_owner is null; -- nobody on the team to give it to
 
-    select s.tag into v_product from conv_tag_seen s
+    select btrim(s.tag) into v_product from conv_tag_seen s
     where s.conversation_id = c.conversation_id and fu_is_product(s.tag)
     order by fu_tag_day(s.conversation_id, s.tag) nulls last, s.tag
     limit 1;
@@ -111,7 +114,7 @@ begin
 
     select cv.page_id, cv.pancake_url into v_page, v_url from conversations cv
     where cv.conversation_id = c.conversation_id order by cv.day desc limit 1;
-    if v_url is null or v_url = '' or length(v_url) > 350 or exists (select 1 from fu_leads where chat_url = v_url) then
+    if v_url is null or v_url !~* '^https?://' or length(v_url) > 350 or exists (select 1 from fu_leads where chat_url = v_url) then
       v_url := '';
     end if;
 
@@ -138,7 +141,7 @@ begin
     order by t.id, g.r, t.td nulls last),
   ins as (
     insert into fu_events (lead_id, kind, round_no, result, due_day, at)
-    select id, 'round', r, 'tag', fu_due_day(first_day, r), coalesce((td + time '12:00') at time zone 'Asia/Bangkok', now())
+    select id, 'round', r, 'tag', fu_due_day(first_day, r), least(coalesce((td + time '12:00') at time zone 'Asia/Bangkok', now()), now())
     from r
     on conflict (lead_id, round_no) where kind in ('round', 'skip') do nothing
     returning lead_id)
@@ -153,15 +156,23 @@ begin
   on conflict (lead_id, round_no) where kind in ('round', 'skip') do nothing;
   get diagnostics n_skipped = row_count;
 
-  -- a close tag first seen after the customer entered the queue = bought (the order number is added by hand)
-  with w as (
+  -- a close tag first seen after the customer entered the queue = bought (the order number is added by hand),
+  -- dated the day the tag appeared. A status someone set on or after that day wins: a reopened customer stays open.
+  with cand as (
+    select l.id, min(s.first_day) as cd
+    from fu_leads l join conv_tag_seen s on s.conversation_id = l.conversation_id
+    where l.status = 'active' and btrim(s.tag) in ('ปิด', 'ปิดAds', 'ปิดOrganic')
+      and not s.baseline and s.first_day > l.first_day
+    group by l.id),
+  w as (
     update fu_leads l set status = 'won', version = version + 1, updated_at = now()
-    where l.status = 'active' and l.conversation_id is not null
-      and exists (select 1 from conv_tag_seen s
-                  where s.conversation_id = l.conversation_id and btrim(s.tag) in ('ปิด', 'ปิดAds', 'ปิดOrganic')
-                    and not s.baseline and s.first_day > l.first_day)
-    returning l.id)
-  insert into fu_events (lead_id, kind, result, note) select id, 'status', 'won', 'จากแท็กปิดใน Pancake' from w;
+    from cand k
+    where l.id = k.id
+      and not exists (select 1 from fu_events e
+                      where e.lead_id = l.id and e.kind = 'status' and (e.at at time zone 'Asia/Bangkok')::date >= k.cd)
+    returning l.id, k.cd)
+  insert into fu_events (lead_id, kind, result, note, at)
+  select id, 'status', 'won', 'จากแท็กปิดใน Pancake', least((cd + time '12:00') at time zone 'Asia/Bangkok', now()) from w;
   get diagnostics n_won = row_count;
 
   return jsonb_build_object('added', n_added, 'linked', n_linked, 'rounds', n_rounds, 'skipped', n_skipped, 'won', n_won);
