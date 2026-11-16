@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { pageName } from '../config/pages'
 import type { Upload as UploadRow } from '../data/read'
-import { checkCode, saveMessages, saveOrders, saveTagStats } from '../data/write'
+import { checkCode, saveMessages, saveOrders, saveTagStats, syncFailedText, syncFollowupUpload, syncSummary } from '../data/write'
 import { addDays } from '../metrics/range'
 import { detectKind } from '../parse/detect'
 import { parseMessages } from '../parse/messages'
@@ -139,6 +139,14 @@ export function Upload({ uploads, overrides, onSaved, goTags }: {
           })
         } catch (e) {
           out.push({ fileName: p.fileName, ok: false, text: `บันทึกไม่สำเร็จ: ${(e as Error).message}` })
+        }
+      }
+      // the save above is already done; a failed queue sync only adds a warning line
+      if (ready.some(p => 'convs' in p && out.some(o => o.ok && o.fileName === p.fileName))) {
+        try {
+          out.push({ fileName: 'ติดตาม 7 รอบ', ok: true, text: syncSummary(await syncFollowupUpload(code)) })
+        } catch (e) {
+          out.push({ fileName: 'ติดตาม 7 รอบ', ok: false, text: syncFailedText((e as Error).message) })
         }
       }
       setResults(out)

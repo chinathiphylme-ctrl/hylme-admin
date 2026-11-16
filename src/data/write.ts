@@ -1,4 +1,5 @@
 import type { ConvRow, OrderRow, TagRow } from '../parse/types'
+import type { SyncResult } from './followup'
 import { db } from './client'
 import { toDbConv, toDbOrder, toDbTagRow } from './mappers'
 
@@ -36,3 +37,13 @@ export const addQuote = (code: string, q: { day: string; pageId: string; categor
   rpc<number>('add_quote', { p_code: code, p_day: q.day, p_page: q.pageId, p_category: q.category, p_quote: q.quote, p_note: q.note })
 
 export const deleteQuote = (code: string, id: number) => rpc<void>('delete_quote', { p_code: code, p_id: id })
+
+// ---- follow-up queue: chats tagged ติดตาม enter it after a message upload ----
+
+export const syncFollowupUpload = (code: string) => rpc<SyncResult>('fu_sync_upload', { p_code: code })
+
+export const syncSummary = (r: SyncResult) =>
+  `เพิ่มเข้าคิว ${r.added + r.linked} ราย · บันทึกรอบจากแท็ก ${r.rounds} · ซื้อแล้ว ${r.won} ราย`
+
+export const syncFailedText = (message: string) =>
+  `ไฟล์ข้อความบันทึกแล้ว แต่ดึงลูกค้าเข้าคิวติดตามไม่สำเร็จ: ${message} — ระบบจะลองใหม่ตอนเปิดแท็บติดตาม`
