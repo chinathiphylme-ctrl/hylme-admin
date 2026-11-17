@@ -92,6 +92,24 @@ describe('orderStats', () => {
     expect(data).toHaveLength(3)
     expect(orderStats(data.map(o => ({ ...o, admin: ' CHINATHIPHYLME ' })), 'all').count).toBe(0)
   })
+  it('counts only chat-page orders for admins and shows the other channels apart', () => {
+    const data = parse([
+      order('chat', { 'มูลค่าคำสั่งซื้อหลังหักส่วนลด': 3000 }),
+      order('tel1', { 'มูลค่าคำสั่งซื้อหลังหักส่วนลด': 2000, 'พนักงานยืนยัน': 'จิตรานนท์ ชิตานุช', 'แหล่งที่มาของคำสั่งซื้อ': 'Telesales' }),
+      order('tel2', { 'มูลค่าคำสั่งซื้อหลังหักส่วนลด': 1000, 'พนักงานยืนยัน': 'จิตรานนท์ ชิตานุช', 'แหล่งที่มาของคำสั่งซื้อ': 'Telesales' }),
+      order('line', { 'มูลค่าคำสั่งซื้อหลังหักส่วนลด': 500, 'แหล่งที่มาของคำสั่งซื้อ': 'Line / Hylme Privilege' }),
+      order('telx', { 'มูลค่าคำสั่งซื้อหลังหักส่วนลด': 900, 'แหล่งที่มาของคำสั่งซื้อ': 'Telesales', 'สถานะ': 'ยกเลิก' }),
+    ]).orders
+    const s = orderStats(data, 'all')
+    expect(s.admins.map(a => [a.admin, a.revenue, a.share])).toEqual([['นุ่น', 3000, 100]])
+    expect([s.count, s.revenue, s.avg]).toEqual([1, 3000, 3000])
+    expect(s.other).toEqual({
+      count: 3, revenue: 3500,
+      bySource: [{ source: 'Telesales', orders: 2, revenue: 3000 }, { source: 'Line / Hylme Privilege', orders: 1, revenue: 500 }],
+    })
+    expect(orderStats(data, FB).other).toEqual({ count: 0, revenue: 0, bySource: [] })
+  })
+
   const r = parse([
     order('1', { 'มูลค่าคำสั่งซื้อหลังหักส่วนลด': 1000 }),
     order('2', { 'มูลค่าคำสั่งซื้อหลังหักส่วนลด': 500, 'พนักงานยืนยัน': 'จิตรานนท์ ชิตานุช', 'แหล่งที่มาของคำสั่งซื้อ': `Facebook / Hylme ครบจบเรื่องไขมัน (${FAT})` }),

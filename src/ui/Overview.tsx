@@ -145,7 +145,7 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '6px 16px' }}>
           <div className="stack" style={{ gap: 4 }}>
             <h2>ยอดขายรายแอดมิน</h2>
-            <p className="desc">จากไฟล์ออเดอร์ของ Pancake นับตามคนที่ยืนยันออเดอร์ ไม่รวมออเดอร์ที่ยกเลิกและบัญชี chinathiphylme{page === 'all' ? '' : ' เฉพาะออเดอร์จากเพจนี้'}</p>
+            <p className="desc">จากไฟล์ออเดอร์ของ Pancake นับตามคนที่ยืนยันออเดอร์ เฉพาะออเดอร์จากแชทเพจ Facebook/IG ไม่รวมออเดอร์ที่ยกเลิกและบัญชี chinathiphylme{page === 'all' ? '' : ' เฉพาะออเดอร์จากเพจนี้'}</p>
           </div>
           {os.count > 0 && (
             <span style={{ fontSize: 14, color: '#435349' }}>
@@ -153,7 +153,7 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
             </span>
           )}
         </div>
-        {os.count > 0 || closes.some(c => c.chats > 0) ? (
+        {os.count > 0 || os.other.count > 0 || closes.some(c => c.chats > 0) ? (
           <div className="grid g-380">
             <div className="stack" style={{ gap: 12 }}>
               {adminRows.map(a => (
@@ -167,6 +167,11 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
                   </span>)}
                 </div>
               ))}
+              {os.other.count > 0 && (
+                <p className="small" style={{ margin: 0 }}>
+                  ช่องทางอื่นที่ไม่นับเป็นยอดแอดมิน: {os.other.bySource.map(b => `${b.source} ${fmt(b.orders)} ออเดอร์ ฿${fmt(b.revenue)}`).join(' · ')}
+                </p>
+              )}
             </div>
             <div className="stack" style={{ gap: 10 }}>
               <h3 style={{ fontSize: 14 }}>สินค้าที่ขายได้ (ชิ้น)</h3>
