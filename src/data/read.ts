@@ -1,10 +1,11 @@
-import { PAGES, type PageId } from '../config/pages'
+import type { PageId } from '../config/pages'
 import { CLOSE_TAGS } from '../grouping/rules'
 import type { Seen } from '../metrics/conversations'
 import type { Quote, QuoteCategory } from '../metrics/quotes'
 import { daysIn, previousRange, type DateRange } from '../metrics/range'
 import type { ConvRow, OrderRow, TagRow } from '../parse/types'
 import { db } from './client'
+import { byDay, idbStore, type DayStore, type DaySigs } from './dayCache'
 import { fromDbConv, fromDbOrder, fromDbTagRow, type DbConv, type DbOrder, type DbTagRow } from './mappers'
 
 const PAGE = 1000
@@ -21,8 +22,53 @@ async function all<T>(query: (from: number, to: number) => Page<T>): Promise<T[]
   }
 }
 
-export async function fetchTagRows(r: DateRange): Promise<TagRow[]> {
+// ---- days kept in this browser (see dayCache.ts) ----
+
+export type Sigs = { conv: DaySigs; tag: DaySigs }
+
+// null while migration 0007 is not installed (or the call fails): everything then loads the old way
+export async function fetchDaySigs(): Promise<Sigs | null> {
+  const { data, error } = await db().rpc('day_sigs')
+  if (error || !Array.isArray(data)) return null
+  const out: Sigs = { conv: new Map(), tag: new Map() }
+  for (const r of data as { kind: string; day: string; n: number; sig: string }[]) {
+    if (r.kind === 'conv' || r.kind === 'tag') out[r.kind].set(r.day, { n: Number(r.n), sig: r.sig })
+  }
+  return out
+}
+
+// one IndexedDB store for both kinds; undefined = not opened yet, null = this browser has none
+let store: DayStore<unknown> | null | undefined
+const dayStore = <T>() => {
+  if (store === undefined) store = idbStore<unknown>()
+  return store as DayStore<T> | null
+}
+
+// a few days per request keeps the URL short
+const DAYS_PER_CALL = 10
+async function perDay<T extends { day: string }>(days: string[], fetch: (days: string[]) => Promise<T[]>): Promise<Map<string, T[]>> {
+  const out = new Map<string, T[]>()
+  for (let i = 0; i < days.length; i += DAYS_PER_CALL) {
+    for (const row of await fetch(days.slice(i, i + DAYS_PER_CALL))) {
+      const list = out.get(row.day)
+      if (list) list.push(row)
+      else out.set(row.day, [row])
+    }
+  }
+  return out
+}
+
+const tagDays = (days: string[]) => perDay(days, async ds => (await all<DbTagRow>((a, b) =>
+  db().from('tag_daily').select('day,page_id,tag,color,count').in('day', ds).order('day').order('page_id').order('tag').range(a, b)))
+  .map(fromDbTagRow))
+
+const convDays = (days: string[]) => perDay(days, async ds => (await conversationRows((cols, a, b) =>
+  db().from('conversations').select(cols).in('day', ds).order('day').order('conversation_id').range(a, b).returns<DbConv[]>()))
+  .map(fromDbConv))
+
+export async function fetchTagRows(r: DateRange, sigs: Sigs | null = null): Promise<TagRow[]> {
   const from = previousRange(r).from
+  if (sigs) return byDay('tag', sigs.tag, daysIn({ from, to: r.to }), dayStore<TagRow>(), tagDays)
   const rows = await all<DbTagRow>((a, b) =>
     db().from('tag_daily').select('day,page_id,tag,color,count').gte('day', from).lte('day', r.to)
       .order('day').order('page_id').order('tag').range(a, b))
@@ -57,15 +103,10 @@ async function conversationRows(query: (cols: string, from: number, to: number) 
   return rows
 }
 
-export async function fetchConvs(r: DateRange): Promise<ConvRow[]> {
-  const rows = await conversationRows((cols, a, b) =>
-    db().from('conversations').select(cols).gte('day', r.from).lte('day', r.to)
-      .order('day').order('conversation_id').range(a, b).returns<DbConv[]>())
-  return rows.map(fromDbConv)
-}
-
-// every export row of every chat; leads need each chat's whole history (about 2,100 rows on 11/11/2026)
-export async function fetchAllConvs(): Promise<ConvRow[]> {
+// every export row of every chat; leads need each chat's whole history (about 3,000 rows on 18/11/2026).
+// With fingerprints, only new or changed days are downloaded; the rest come from this browser.
+export async function fetchAllConvs(sigs: Sigs | null = null): Promise<ConvRow[]> {
+  if (sigs) return byDay('conv', sigs.conv, [...sigs.conv.keys()], dayStore<ConvRow>(), convDays, { prune: true })
   const rows = await conversationRows((cols, a, b) =>
     db().from('conversations').select(cols).order('day').order('conversation_id').range(a, b).returns<DbConv[]>())
   return rows.map(fromDbConv)
@@ -76,21 +117,6 @@ export async function fetchOrders(r: DateRange): Promise<OrderRow[]> {
     db().from('pancake_orders').select('order_id,day,confirmed_at,admin,source,page_id,amount,discount,cod,status,items')
       .gte('day', r.from).lte('day', r.to).order('day').order('order_id').range(a, b))
   return rows.map(fromDbOrder)
-}
-
-// the newest message day of each page, for the follow-up list
-export async function fetchLatestConvs(): Promise<ConvRow[]> {
-  const perPage = await Promise.all(PAGES.map(async ({ id }: { id: PageId }) => {
-    const { data, error } = await db().from('conversations').select('day').eq('page_id', id)
-      .order('day', { ascending: false }).limit(1)
-    if (error) throw new Error(error.message)
-    const day = data?.[0]?.day
-    if (!day) return []
-    const rows = await conversationRows((cols, a, b) =>
-      db().from('conversations').select(cols).eq('page_id', id).eq('day', day).order('conversation_id').range(a, b).returns<DbConv[]>())
-    return rows.map(fromDbConv)
-  }))
-  return perPage.flat()
 }
 
 // segment rates only need when a close tag first appeared

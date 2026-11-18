@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { PageId } from '../config/pages'
+import { convsInRange, latestPerPage } from '../data/derive'
 import {
-  fetchAllConvs, fetchAllTags, fetchConvs, fetchDays, fetchGroups, fetchLatestConvs, fetchOrders, fetchSeen, fetchTagRows, fetchUploads, type Upload,
+  fetchAllConvs, fetchAllTags, fetchDays, fetchDaySigs, fetchGroups, fetchOrders, fetchSeen, fetchTagRows, fetchUploads, type Sigs, type Upload,
 } from '../data/read'
 import { groupOf } from '../grouping/rules'
 import { followList, type Seen } from '../metrics/conversations'
@@ -32,6 +33,11 @@ type Base = {
   uploads: Upload[]
   allTags: { tag: string; color: string; total: number }[]
   leads: Lead[]
+  // every chat row; the range view and the latest-day list are cut from it instead of downloaded again
+  allConvs: ConvRow[]
+  sigs: Sigs | null
+  // the reload this base came from, so the range data waits for fresh fingerprints after an upload
+  loadId: number
 }
 
 export function App() {
@@ -44,7 +50,6 @@ export function App() {
   const [custom, setCustom] = useState<DateRange | null>(null)
   const [base, setBase] = useState<Base | null>(null)
   const [rows, setRows] = useState<TagRow[] | null>(null)
-  const [convs, setConvs] = useState<ConvRow[]>([])
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
@@ -62,10 +67,15 @@ export function App() {
   useEffect(() => {
     let live = true
     // leads need each chat's whole history: a chat's start and "new" status come from its first export ever,
-    // so they must not depend on the range being viewed
-    Promise.all([fetchDays(), fetchGroups(), fetchLatestConvs(), fetchSeen(), fetchUploads(), fetchAllTags(), fetchAllConvs()])
-      .then(([days, groups, latestConvs, seen, uploads, allTags, allConvs]) => {
-        if (live) setBase({ days, ...groups, latestConvs, seen, uploads, allTags, leads: toLeads(allConvs) })
+    // so they must not depend on the range being viewed. Chats and tag counts this browser already has are not
+    // downloaded again (day fingerprints, see data/dayCache.ts).
+    const loadId = version
+    fetchDaySigs()
+      .then(sigs => Promise.all([fetchDays(), fetchGroups(), fetchSeen(), fetchUploads(), fetchAllTags(), fetchAllConvs(sigs), Promise.resolve(sigs)]))
+      .then(([days, groups, seen, uploads, allTags, allConvs, sigs]) => {
+        if (live) {
+          setBase({ days, ...groups, latestConvs: latestPerPage(allConvs), seen, uploads, allTags, leads: toLeads(allConvs), allConvs, sigs, loadId })
+        }
       })
       .catch(e => live && setError(String(e.message ?? e)))
     return () => { live = false }
@@ -74,18 +84,23 @@ export function App() {
   const latest = base?.days.at(-1) ?? null
   const range = useMemo(() => (latest ? rangeFor(rangeKey, latest, custom ?? undefined, selectedDay ?? undefined) : null), [latest, rangeKey, custom, selectedDay])
   const dataKey = range ? `${range.from}|${range.to}|${version}` : ''
+  // after a reload the old base is still on screen until the new one arrives; wait for it, so the tag counts are
+  // read with the new fingerprints
+  const baseFresh = base !== null && base.loadId === version
 
   useEffect(() => {
-    if (!range) return
+    if (!range || !baseFresh) return
     let live = true
     setRows(null)
     // widen to 14 days so the trend chart has context even for a one-day view
     const widened = { from: range.from < addDays(range.to, -13) ? range.from : addDays(range.to, -13), to: range.to }
-    Promise.all([fetchTagRows(widened), fetchConvs(range), fetchOrders(range)])
-      .then(([r, c, o]) => { if (live) { setRows(r); setConvs(c); setOrders(o); setLoadedKey(dataKey) } })
+    Promise.all([fetchTagRows(widened, base.sigs), fetchOrders(range)])
+      .then(([r, o]) => { if (live) { setRows(r); setOrders(o); setLoadedKey(dataKey) } })
       .catch(e => live && setError(String(e.message ?? e)))
     return () => { live = false }
-  }, [range?.from, range?.to, version]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [range?.from, range?.to, version, baseFresh]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const convs = useMemo(() => (base && range ? convsInRange(base.allConvs, range) : []), [base, range])
 
   // follow-list grades use every export of those chats, not just the latest file
   const follow = useMemo(() => {
