@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  fetchFollowup, fetchOrdersByIds, syncFromTags, getActor, isTeamMember, onAuthChange, sessionUserId, setActor, signOut, type FollowupData,
+  fetchFollowup, fetchOrdersByIds, refreshFollowup, syncFromTags, getActor, isTeamMember, onAuthChange, sessionUserId, setActor, signOut, type FollowupData,
 } from '../../data/followup'
 import type { Staff } from '../../followup/report'
 import type { OrderRow } from '../../parse/types'
@@ -16,12 +16,14 @@ export type FollowupState =
   | Ready
 
 export type Followup = FollowupState & {
-  reload: () => Promise<void>; signOut: () => Promise<void>; pick: (id: string | null) => void
+  reload: () => Promise<void>; refresh: () => Promise<void>; signOut: () => Promise<void>; pick: (id: string | null) => void
 }
 
 // one load for both follow-up tabs and the sidebar badge; reloads after every save and on sign-in/out
 export function useFollowup(): Followup {
   const [state, setState] = useState<FollowupState>({ status: 'loading' })
+  const current = useRef<FollowupState>(state)
+  current.current = state
 
   const reload = useCallback(async () => {
     try {
@@ -39,6 +41,24 @@ export function useFollowup(): Followup {
     }
   }, [])
 
+  // after a save: only what changed (saves Supabase Free egress); anything odd falls back to the full load
+  const refresh = useCallback(async () => {
+    const s = current.current
+    if (s.status !== 'ready') { await reload(); return }
+    try {
+      const data = await refreshFollowup(s)
+      const me = data.staff.find(x => x.id === s.me.id && x.active)
+      if (!me) { await reload(); return }
+      const ids = data.links.map(k => k.orderId)
+      const known = new Map(s.orders.map(o => [o.orderId, o]))
+      const fetched = await fetchOrdersByIds(ids.filter(id => !known.has(id)))
+      const orders = [...ids.flatMap(id => known.get(id) ?? []), ...fetched]
+      setState({ status: 'ready', me, orders, ...data })
+    } catch {
+      await reload()
+    }
+  }, [reload])
+
   useEffect(() => {
     void reload()
     return onAuthChange(() => { void reload() })
@@ -47,5 +67,5 @@ export function useFollowup(): Followup {
   const out = useCallback(async () => { await signOut(); setState({ status: 'signedOut' }) }, [])
   // pick(null) goes back to the name list, e.g. when someone else uses this device
   const pick = useCallback((id: string | null) => { setActor(id); void reload() }, [reload])
-  return { ...state, reload, signOut: out, pick } as Followup
+  return { ...state, reload, refresh, signOut: out, pick } as Followup
 }

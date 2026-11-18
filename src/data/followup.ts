@@ -102,8 +102,8 @@ export type FollowupData = { staff: Staff[]; leads: FuLead[]; events: FuEvent[];
 export async function fetchFollowup(): Promise<FollowupData> {
   const [staff, leads, events, links] = await Promise.all([
     all<{ id: string; name: string; role: Role; active: boolean }>('staff', 'id,name,role,active', 'name'),
-    all<DbLead>('fu_leads', 'id,name,product,owner_id,first_day,page_id,chat_url,objection,notes,status,version,created_at,updated_at,conversation_id,source', 'first_day'),
-    all<DbEvent>('fu_events', 'id,lead_id,kind,round_no,result,due_day,note,order_id,at,by', 'id'),
+    all<DbLead>('fu_leads', LEAD_COLS, 'first_day'),
+    all<DbEvent>('fu_events', EVENT_COLS, 'id'),
     all<{ order_id: string; lead_id: string; linked_at: string; linked_by: string | null }>('fu_orders', 'order_id,lead_id,linked_at,linked_by', 'linked_at'),
   ])
   return {
@@ -112,6 +112,74 @@ export async function fetchFollowup(): Promise<FollowupData> {
     events: events.map(fromDbEvent),
     links: links.map(k => ({ orderId: k.order_id, leadId: k.lead_id, linkedAt: k.linked_at, linkedBy: k.linked_by })),
   }
+}
+
+// ---- after a save: fetch only what changed (saves Supabase Free egress) ----
+// Every change to a customer bumps its version (fu_touch / fu_sync); history rows are only ever added, or removed with
+// their customer. So a save needs: every customer's id + version (small), the changed customers in full, history rows
+// newer than the ones on screen, and the two small tables. Opening the tab still loads everything.
+
+export type LeadStamp = { id: string; version: number; updatedAt: string }
+
+export function changedLeadIds(prev: FuLead[], stamps: LeadStamp[]): string[] {
+  const had = new Map(prev.map(l => [l.id, l]))
+  return stamps.filter(s => {
+    const l = had.get(s.id)
+    return !l || l.version !== s.version || l.updatedAt !== s.updatedAt
+  }).map(s => s.id)
+}
+
+export function mergeFollowup(prev: FollowupData, stamps: LeadStamp[],
+  fresh: { leads: FuLead[]; events: FuEvent[]; staff: Staff[]; links: OrderLink[] }): FollowupData {
+  const live = new Set(stamps.map(s => s.id))
+  const byId = new Map(prev.leads.map(l => [l.id, l]))
+  for (const l of fresh.leads) byId.set(l.id, l)
+  // the full load sorts by first day; the sort is stable, so customers on the same day keep their place
+  const leads = [...byId.values()].filter(l => live.has(l.id)).sort((a, b) => (a.firstDay < b.firstDay ? -1 : a.firstDay > b.firstDay ? 1 : 0))
+  const ev = new Map(prev.events.map(e => [e.id, e]))
+  for (const e of fresh.events) ev.set(e.id, e)
+  const events = [...ev.values()].filter(e => live.has(e.leadId)).sort((a, b) => a.id - b.id)
+  return { staff: fresh.staff, links: fresh.links, leads, events }
+}
+
+// history ids come from a sequence; a save that committed a moment late can hold a slightly smaller id, so look back a little
+const EVENT_OVERLAP = 50
+
+async function paged<T>(query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await query(from, from + PAGE - 1)
+    if (error) throw new Error(error.message)
+    out.push(...(data ?? []))
+    if (!data || data.length < PAGE) return out
+  }
+}
+
+const LEAD_COLS = 'id,name,product,owner_id,first_day,page_id,chat_url,objection,notes,status,version,created_at,updated_at,conversation_id,source'
+const EVENT_COLS = 'id,lead_id,kind,round_no,result,due_day,note,order_id,at,by'
+
+export async function refreshFollowup(prev: FollowupData): Promise<FollowupData> {
+  const stamps = (await all<{ id: string; version: number; updated_at: string }>('fu_leads', 'id,version,updated_at', 'first_day'))
+    .map(s => ({ id: s.id, version: s.version, updatedAt: s.updated_at }))
+  const ids = changedLeadIds(prev.leads, stamps)
+  const leads: FuLead[] = []
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data, error } = await db().from('fu_leads').select(LEAD_COLS).in('id', ids.slice(i, i + 100)).returns<DbLead[]>()
+    if (error) throw new Error(error.message)
+    leads.push(...(data ?? []).map(fromDbLead))
+  }
+  const after = prev.events.reduce((m, e) => Math.max(m, e.id), 0) - EVENT_OVERLAP
+  const [events, staff, links] = await Promise.all([
+    paged<DbEvent>((a, b) => db().from('fu_events').select(EVENT_COLS).gt('id', after).order('id').range(a, b).returns<DbEvent[]>()),
+    all<{ id: string; name: string; role: Role; active: boolean }>('staff', 'id,name,role,active', 'name'),
+    all<{ order_id: string; lead_id: string; linked_at: string; linked_by: string | null }>('fu_orders', 'order_id,lead_id,linked_at,linked_by', 'linked_at'),
+  ])
+  return mergeFollowup(prev, stamps, {
+    leads,
+    events: events.map(fromDbEvent),
+    staff: staff.map(s => ({ id: s.id, name: s.name, role: s.role, active: s.active })),
+    links: links.map(k => ({ orderId: k.order_id, leadId: k.lead_id, linkedAt: k.linked_at, linkedBy: k.linked_by })),
+  })
 }
 
 // the linked Pancake orders; an id missing here has not been uploaded yet

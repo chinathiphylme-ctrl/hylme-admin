@@ -133,8 +133,8 @@ export function App() {
   if (tab === 'care' || tab === 'gm') {
     // the follow-up tabs have their own data and sign-in, so they work even when the dashboard data fails
     body = fu.status !== 'ready' ? <Gate fu={fu} />
-      : tab === 'care' ? <Care fu={fu} reload={fu.reload} signOut={fu.signOut} switchUser={() => fu.pick(null)} />
-        : <Report fu={fu} reload={fu.reload} />
+      : tab === 'care' ? <Care fu={fu} reload={fu.refresh} signOut={fu.signOut} switchUser={() => fu.pick(null)} />
+        : <Report fu={fu} reload={fu.refresh} />
   } else if (error) {
     body = (
       <section className="card">
