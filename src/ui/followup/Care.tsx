@@ -9,6 +9,7 @@ import { thaiDay } from '../viewModel'
 import { dayYear, StatePill, useToast } from './common'
 import { LeadDrawer } from './LeadDrawer'
 import { LeadForm } from './LeadForm'
+import { SilentChats, type SilentItem } from './SilentChats'
 import type { Ready } from './useFollowup'
 
 type Sub = 'today' | 'list' | 'plan'
@@ -19,8 +20,8 @@ const STATUS_FILTERS: [string, string][] = [
   ['optout', 'หยุดติดต่อ'], ['paused', 'พักติดตาม'], ['completed', 'ครบ 7 รอบ'],
 ]
 
-export function Care({ fu, reload, signOut, switchUser }: {
-  fu: Ready; reload: () => Promise<void>; signOut: () => Promise<void>; switchUser: () => void
+export function Care({ fu, silent, reload, signOut, switchUser }: {
+  fu: Ready; silent: SilentItem[]; reload: () => Promise<void>; signOut: () => Promise<void>; switchUser: () => void
 }) {
   const today = bangkokToday()
   const gm = fu.me.role === 'gm'
@@ -107,6 +108,7 @@ export function Care({ fu, reload, signOut, switchUser }: {
 
       {sub === 'today' && (
         <>
+          <SilentChats items={silent} today={today} onSaved={saved} />
           <div className="fu-bar">
             <div className="chips" role="group" aria-label="ช่วงงาน">
               {TASK_FILTERS.map(([k, t]) => <button key={k} type="button" className="chip" aria-pressed={taskFilter === k} onClick={() => setTaskFilter(k)}>{t}</button>)}

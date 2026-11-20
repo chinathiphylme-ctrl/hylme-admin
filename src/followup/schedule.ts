@@ -33,7 +33,7 @@ export const STATE_LABEL: Record<State, string> = {
 export type FuLead = {
   id: string; name: string; product: string; ownerId: string; firstDay: string; pageId: PageId | null
   chatUrl: string; objection: string; notes: string; status: LeadStatus; version: number; createdAt: string; updatedAt: string
-  conversationId: string | null; source: 'manual' | 'tag' // 'tag' = added by the sync from a chat tagged ติดตาม
+  conversationId: string | null; source: 'manual' | 'tag' | 'chat' // 'tag' = added by the sync from a chat tagged ติดตาม; 'chat' = started from a silent chat
 }
 
 export type FuEvent = {

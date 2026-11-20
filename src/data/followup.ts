@@ -29,7 +29,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
 export type DbLead = {
   id: string; name: string; product: string; owner_id: string; first_day: string; page_id: string | null; chat_url: string
   objection: string; notes: string; status: LeadStatus; version: number; created_at: string; updated_at: string
-  conversation_id: string | null; source: 'manual' | 'tag'
+  conversation_id: string | null; source: 'manual' | 'tag' | 'chat'
 }
 export type DbEvent = {
   id: number; lead_id: string; kind: FuEvent['kind']; round_no: number | null; result: string | null; due_day: string | null
@@ -217,6 +217,10 @@ export const sameName = (name: string, exclude: string | null) =>
 
 export const recordRound = (lead: FuLead, round: number, result: RoundResult, note: string, orderId: string) =>
   act<number>('fu_record_round', { p_lead: lead.id, p_version: lead.version, p_round: round, p_result: result, p_note: note, p_order: orderId })
+
+// a silent chat from the follow list: added to the queue with this result as its next round (fu_start_chat)
+export const startFromChat = (conversationId: string, result: RoundResult, note: string, orderId: string) =>
+  act<string>('fu_start_chat', { p_conv: conversationId, p_result: result, p_note: note, p_order: orderId })
 
 export const skipRound = (lead: FuLead, round: number, reason: string) =>
   act<number>('fu_skip_round', { p_lead: lead.id, p_version: lead.version, p_round: round, p_reason: reason })

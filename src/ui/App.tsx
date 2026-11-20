@@ -10,12 +10,13 @@ import { gradeOf, toLeads, type Lead } from '../metrics/leads'
 import { addDays, rangeFor, type DateRange, type RangeKey } from '../metrics/range'
 import type { ConvRow, OrderRow, TagRow } from '../parse/types'
 import { FilterBar } from './FilterBar'
-import { Follow } from './Follow'
 import { Care } from './followup/Care'
 import { Gate } from './followup/Login'
 import { Report } from './followup/Report'
 import { useFollowup } from './followup/useFollowup'
 import { bangkokToday, queue } from '../followup/schedule'
+import { notQueued, silentByDay } from '../followup/silent'
+import type { SilentItem } from './followup/SilentChats'
 import { Overview } from './Overview'
 import { Ads } from './Ads'
 import { Quotes } from './Quotes'
@@ -107,6 +108,17 @@ export function App() {
     const grades = new Map((base?.leads ?? []).map(l => [l.conversationId, gradeOf(l)]))
     return followList(base?.latestConvs ?? [], grades)
   }, [base])
+  // the follow list lives in the follow-up tab: only chats nobody has put in the queue, with day 1 of each
+  const silent = useMemo((): SilentItem[] => {
+    if (fu.status !== 'ready' || !base) return []
+    const start = new Map(base.leads.map(l => [l.conversationId, l.startDay]))
+    return notQueued(follow, fu.leads).map(f => ({ ...f, startDay: start.get(f.conversationId) ?? f.day }))
+  }, [follow, fu, base])
+  const silentDays = useMemo(() => {
+    if (!base) return new Map()
+    return silentByDay(base.allConvs, new Map(base.leads.map(l => [l.conversationId, gradeOf(l)])))
+  }, [base])
+  const careBadge = careCount === null ? null : careCount + silent.length
   const unassigned = useMemo(
     () => (base?.allTags ?? []).filter(t => groupOf(t.tag, base!.overrides) === 'ยังไม่จัดกลุ่ม').length, [base])
 
@@ -133,8 +145,8 @@ export function App() {
   if (tab === 'care' || tab === 'gm') {
     // the follow-up tabs have their own data and sign-in, so they work even when the dashboard data fails
     body = fu.status !== 'ready' ? <Gate fu={fu} />
-      : tab === 'care' ? <Care fu={fu} reload={fu.refresh} signOut={fu.signOut} switchUser={() => fu.pick(null)} />
-        : <Report fu={fu} reload={fu.refresh} />
+      : tab === 'care' ? <Care fu={fu} silent={silent} reload={fu.refresh} signOut={fu.signOut} switchUser={() => fu.pick(null)} />
+        : <Report fu={fu} silentDays={silentDays} reload={fu.refresh} />
   } else if (error) {
     body = (
       <section className="card">
@@ -154,20 +166,18 @@ export function App() {
     body = <Ads leads={base.leads} range={range} page={page} adNames={base.adNames} goTags={() => goTab('tags')} />
   } else if (tab === 'quotes') {
     body = <Quotes leads={base.leads} days={base.days} />
-  } else if (tab === 'follow') {
-    body = <Follow items={follow} />
   } else if (!latest || !range) {
     body = <section className="card"><h2>ยังไม่มีข้อมูล อัปโหลดไฟล์แรกได้ที่เมนูอัปโหลด</h2></section>
   } else if (!rows || loadedKey !== dataKey) {
     body = <div className="grid g-200">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton" />)}</div>
   } else {
     body = <Overview rows={rows} convs={convs} orders={orders} leads={base.leads} seen={base.seen} range={range} page={page} setPage={setPage}
-      overrides={base.overrides} adNames={base.adNames} followCount={follow.length} goFollow={() => setTab('follow')} />
+      overrides={base.overrides} adNames={base.adNames} followCount={follow.length} goFollow={() => goTab('care')} />
   }
 
   return (
     <div className="shell">
-      <Sidebar tab={tab} setTab={goTab} followCount={follow.length} careCount={careCount}
+      <Sidebar tab={tab} setTab={goTab} careCount={careBadge}
         showGm={fu.status === 'ready'} unassigned={unassigned} latest={latest} uploads={base?.uploads ?? []} />
       <main className="main">
         <header className="head">

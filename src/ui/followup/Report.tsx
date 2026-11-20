@@ -4,6 +4,7 @@ import { importLegacy, saveStaff } from '../../data/followup'
 import { parseLegacyCsv, type LegacyRow } from '../../followup/csv'
 import { report, type ReportFilter, type Role, type Staff } from '../../followup/report'
 import { bangkokToday } from '../../followup/schedule'
+import { silentReport, type Listed } from '../../followup/silent'
 import { addDays } from '../../metrics/range'
 import { rangeLabel } from '../viewModel'
 import { errText, money, useToast } from './common'
@@ -12,7 +13,7 @@ import type { Ready } from './useFollowup'
 type Preset = 'today' | '7d' | '30d' | 'month' | 'custom'
 const PRESETS: [Preset, string][] = [['today', 'วันนี้'], ['7d', '7 วัน'], ['30d', '30 วัน'], ['month', 'เดือนนี้'], ['custom', 'กำหนดเอง']]
 
-export function Report({ fu, reload }: { fu: Ready; reload: () => Promise<void> }) {
+export function Report({ fu, silentDays, reload }: { fu: Ready; silentDays: Map<string, Listed[]>; reload: () => Promise<void> }) {
   const today = bangkokToday()
   const [preset, setPreset] = useState<Preset>('30d')
   const [custom, setCustom] = useState({ from: addDays(today, -6), to: today })
@@ -31,6 +32,7 @@ export function Report({ fu, reload }: { fu: Ready; reload: () => Promise<void> 
     () => report({ leads: fu.leads, events: fu.events, links: fu.links, orders: fu.orders, staff: fu.staff, today }, filter),
     [fu, today, filter.from, filter.to, ownerId, pageId, product], // eslint-disable-line react-hooks/exhaustive-deps
   )
+  const silent = silentReport(silentDays, fu.leads, fu.events, range, pageId, ownerId)
   const products = [...new Set(fu.leads.map(l => l.product))].sort((a, b) => a.localeCompare(b, 'th'))
   const maxFollow = Math.max(1, ...r.byOwner.map(o => o.followups))
 
@@ -72,6 +74,14 @@ export function Report({ fu, reload }: { fu: Ready; reload: () => Promise<void> 
         <Tile label="ซื้อแล้ว" value={`${r.won}`} note="ราย ในช่วงที่เลือก" color="#1F7A4A" />
         <Tile label="ยอดขายหลังติดตาม" value={money(r.sales)} note={`${r.salesOrders} ออเดอร์ที่ยืนยันจากไฟล์ Pancake`} />
       </div>
+
+      {silent.listed > 0 && (
+        <section className="card" aria-label="แชทเงียบใหม่" style={{ gap: 6 }}>
+          <h2>แชทเงียบใหม่</h2>
+          <p style={{ fontSize: 15 }}>ขึ้นรายชื่อ <b>{silent.listed}</b> คน · ตามแล้ว <b>{silent.followed}</b> คน · ซื้อแล้ว <b>{silent.won}</b> คน</p>
+          <p className="small">ขึ้นรายชื่อ = แชทที่ถึงขั้นขอราคา ขอโปร ลังเล หรือพร้อมสั่ง แล้วเงียบในไฟล์ข้อความวันใดวันหนึ่งของช่วงนี้ · ตามแล้ว = อยู่ในคิว 7 รอบและมีบันทึกผลอย่างน้อยหนึ่งรอบ (กดในเว็บหรือแท็กติดตามN) · ตัวกรองแอดมินใช้กับ “ตามแล้ว” และ “ซื้อแล้ว” · ตัวกรองสินค้าไม่ใช้กับบรรทัดนี้</p>
+        </section>
+      )}
 
       {(r.pending > 0 || r.cancelled > 0 || r.wonNoOrder > 0) && (
         <div className="callout">
