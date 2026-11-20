@@ -69,7 +69,7 @@ describe('toLeads', () => {
 
 describe('gradeStats', () => {
   it('gives four rows with rates', () => {
-    const base = { conversationId: 'x', pageId: '100379779472465', startDay: '2026-11-01', lastDay: '2026-11-01', isNew: true, phone: false, ads: [] } as const
+    const base = { conversationId: 'x', pageId: '100379779472465', startDay: '2026-11-01', lastDay: '2026-11-01', isNew: true, phone: false, closeDay: null, ads: [] } as const
     const leads: Lead[] = [
       { ...base, tags: [], msgs: 5, days: 1, typedFirst: true, closed: true },
       { ...base, tags: [], msgs: 5, days: 1, typedFirst: true, closed: false },

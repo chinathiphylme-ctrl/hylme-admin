@@ -4,7 +4,7 @@ import type { Lead } from '../src/metrics/leads'
 const FB = '100379779472465'
 const lead = (over: Partial<Lead> = {}): Lead => ({
   conversationId: 'c', pageId: FB, startDay: '2026-11-04', lastDay: '2026-11-08', isNew: false,
-  tags: ['พี่ก้อย'], topics: [], msgs: 1, days: 1, phone: false, typedFirst: false, closed: true, ads: [], ...over,
+  tags: ['พี่ก้อย'], topics: [], msgs: 1, days: 1, phone: false, typedFirst: false, closed: true, closeDay: null, ads: [], ...over,
 })
 const range = { from: '2026-11-01', to: '2026-11-10' }
 describe('adminCloses', () => {

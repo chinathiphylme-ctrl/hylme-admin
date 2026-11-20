@@ -7,7 +7,7 @@ const FAT = '516356078238016'
 let n = 0
 const lead = (ads: string[], closed: boolean, over: Partial<Lead> = {}): Lead => ({
   conversationId: `l${++n}`, pageId: FB, startDay: '2026-11-01', lastDay: '2026-11-02', isNew: true,
-  tags: ads, topics: [], msgs: 1, days: 1, phone: false, typedFirst: false, closed, ads, ...over,
+  tags: ads, topics: [], msgs: 1, days: 1, phone: false, typedFirst: false, closed, closeDay: null, ads, ...over,
 })
 const many = (k: number, ad: string[], closed: number, over: Partial<Lead> = {}) =>
   Array.from({ length: k }, (_, i) => lead(ad, i < closed, over))

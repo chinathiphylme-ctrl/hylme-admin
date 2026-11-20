@@ -88,7 +88,7 @@ export function Quotes({ leads, days }: { leads: Lead[]; days: string[] }) {
         </label>
       </div>
 
-      <Reasons leads={leads.filter(l => l.isNew && (fPage === 'all' || l.pageId === fPage) && (!from || l.startDay >= from) && l.startDay <= (selectedDay ?? today()))} />
+      <Reasons chats={leads.filter(l => fPage === 'all' || l.pageId === fPage)} from={from} to={selectedDay ?? today()} day={selectedDay} />
 
       <section className="card" aria-label="เพิ่มประโยค">
         <h2>เพิ่มประโยคที่ลูกค้าพูด</h2>

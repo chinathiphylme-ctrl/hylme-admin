@@ -14,7 +14,10 @@ export const GRADES: { grade: Grade; label: string; hint: string }[] = [
 
 export type Lead = {
   conversationId: string; pageId: PageId; startDay: string; lastDay: string; isNew: boolean
-  tags: string[]; topics: string[]; msgs: number; days: number; phone: boolean; typedFirst: boolean; closed: boolean; ads: string[]
+  tags: string[]; topics: string[]; msgs: number; days: number; phone: boolean; typedFirst: boolean; closed: boolean
+  // first message day whose export carries a close tag; for a returning customer it may be an old purchase's tag
+  closeDay: string | null
+  ads: string[]
 }
 
 const OLD = '8.ลูกค้าเก่า'
@@ -66,6 +69,7 @@ export function toLeads(rows: ConvRow[]): Lead[] {
       phone: rs.some(r => r.hasPhone),
       typedFirst: first.firstKind !== 'button',
       closed: tags.some(isCloseTag),
+      closeDay: rs.find(r => r.tags.some(isCloseTag))?.day ?? null,
       ads: tags.filter(isAdTag),
     }
   })

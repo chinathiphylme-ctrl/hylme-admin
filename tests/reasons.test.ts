@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { toLeads, type Lead } from '../src/metrics/leads'
-import { dropStages, reasonTagStats, topicCoverage, topicStats } from '../src/metrics/reasons'
+import { closedOnDay, dropStages, latestDay, reasonTagStats, topicCoverage, topicStats, whoOf } from '../src/metrics/reasons'
 
 const lead = (topics: string[] = [], closed = false, tags: string[] = []): Lead => ({
   conversationId: 'c', pageId: '100379779472465', startDay: '2026-11-06', lastDay: '2026-11-06',
-  isNew: true, tags, topics, msgs: 1, days: 1, phone: false, typedFirst: true, closed, ads: [],
+  isNew: true, tags, topics, msgs: 1, days: 1, phone: false, typedFirst: true, closed, closeDay: closed ? '2026-11-06' : null, ads: [],
 })
 describe('reasons', () => {
   it('compares topics against the same cohort, counts no-topic chats and flags small samples', () => {
@@ -37,5 +37,30 @@ describe('reasons', () => {
       firstAt: '', lastAt: '', firstKind: 'typed' as const, msgCount: 1, hasPhone: false, tags: ['6/11'], pancakeUrl: '' }
     expect(toLeads([{ ...row, topics: ['ราคา/แพง'] }, { ...row, day: '2026-11-07', topics: ['ราคา/แพง', 'ขอคิดก่อน'] }])[0].topics)
       .toEqual(['ราคา/แพง', 'ขอคิดก่อน'])
+  })
+  it('splits new chats from returning customers', () => {
+    const xs = [lead(), { ...lead(), conversationId: 'o', isNew: false }]
+    expect(whoOf(xs, 'all')).toHaveLength(2)
+    expect(whoOf(xs, 'new').map(l => l.conversationId)).toEqual(['c'])
+    expect(whoOf(xs, 'old').map(l => l.conversationId)).toEqual(['o'])
+  })
+  it('counts chats first closed on a day and how many carry a buy reason', () => {
+    const xs = [
+      { ...lead([], true, ['ปิด', 'ส่วนผสม']), closeDay: '2026-11-19' },
+      { ...lead([], true, ['ปิดAds']), closeDay: '2026-11-19' },
+      { ...lead([], true, ['ปิด']), closeDay: '2026-11-18' },
+      lead(),
+    ]
+    expect(closedOnDay(xs, '2026-11-19')).toEqual({ closed: 2, tagged: 1 })
+    expect(closedOnDay(xs, '2026-11-20')).toEqual({ closed: 0, tagged: 0 })
+    expect(latestDay([{ ...lead(), lastDay: '2026-11-19' }, lead()])).toBe('2026-11-19')
+    expect(latestDay([])).toBeNull()
+  })
+  it('takes the close day from the first export carrying a close tag', () => {
+    const row = { day: '2026-11-06', conversationId: 'c', pageId: '100379779472465' as const,
+      firstAt: '', lastAt: '', firstKind: 'typed' as const, msgCount: 1, hasPhone: false, tags: ['6/11'], pancakeUrl: '' }
+    expect(toLeads([row, { ...row, day: '2026-11-08', tags: ['6/11', 'ปิดAds'] }, { ...row, day: '2026-11-09', tags: ['ปิด'] }])[0].closeDay)
+      .toBe('2026-11-08')
+    expect(toLeads([row])[0].closeDay).toBeNull()
   })
 })
