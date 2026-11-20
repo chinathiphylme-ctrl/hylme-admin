@@ -1,9 +1,9 @@
 import { TOPICS, type Topic } from '../parse/topics'
 import { stageOf } from './conversations'
 import type { Lead } from './leads'
+import { BUY_REASON_TAGS, LOST_REASON_TAGS } from '../grouping/rules'
 
-export const BUY_REASON_TAGS = ['ส่วนผสม', 'เคยใช้และพอใจ', 'รีวิวจากผู้ใช้', 'คุณภาพสินค้า', 'มีคนแนะนำ', 'ดูแลสุขภาพ', 'โปรโมชั่น', 'มาตรฐาน/แหล่งผล']
-export const LOST_REASON_TAGS = ['ราคาแพง', 'ติดราคา', 'ขอคิดดูก่อน', 'ข้อมูลไม่เพียงพ', 'ไม่ตรงความต้องก', 'เปรียบเทียบแบรน', 'ขาดความมั่นใจ', 'รอโปร', '7.เปรียบเทียบราคา', 'ไม่สนใจ']
+export { BUY_REASON_TAGS, LOST_REASON_TAGS }
 export const MIN_TOPIC_CHATS = 10
 export type TopicRow = { topic: Topic; chats: number; closed: number; rate: number; thin: boolean }
 export type ReasonSide = { rows: [string, number][]; tagged: number; total: number }

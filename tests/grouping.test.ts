@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ALL_GROUPS, STAGE_GROUPS, dateTag, groupOf, isDateTagOf } from '../src/grouping/rules'
+import { BUY_REASON_TAGS, LOST_REASON_TAGS } from '../src/metrics/reasons'
 
 describe('groupOf', () => {
   it.each([
@@ -14,6 +15,14 @@ describe('groupOf', () => {
     ['นุ่น🤍', 'แอดมิน'],
     [' ปิด ', 'ปิดการขาย'],
     ['ติดตาม', 'ยังไม่จัดกลุ่ม'],
+    ['ส่วนผสม', 'เหตุผลที่ซื้อ'],
+    ['เคยใช้และพอใจ', 'เหตุผลที่ซื้อ'],
+    ['มาตรฐาน/แหล่งผล', 'เหตุผลที่ซื้อ'],
+    ['ราคาแพง', 'เหตุผลที่ไม่ซื้อ'],
+    ['ขอคิดดูก่อน', 'เหตุผลที่ไม่ซื้อ'],
+    // these already count in a stage of "ลูกค้าติดตรงไหน"; moving them would change those numbers
+    ['ไม่สนใจ', 'ไม่ซื้อ'],
+    ['7.เปรียบเทียบราคา', 'ติดเรื่องราคา'],
   ])('%s → %s', (tag, group) => {
     expect(groupOf(tag, {})).toBe(group)
   })
@@ -25,6 +34,12 @@ describe('groupOf', () => {
   it('has the stage and full group lists', () => {
     expect(STAGE_GROUPS[6]).toBe('เงียบหาย')
     expect(ALL_GROUPS).toContain('โฆษณา')
+    expect(ALL_GROUPS).toContain('เหตุผลที่ซื้อ')
+    expect(ALL_GROUPS).toContain('เหตุผลที่ไม่ซื้อ')
+  })
+
+  it('puts every buy/not-buy reason tag in a group', () => {
+    for (const t of [...BUY_REASON_TAGS, ...LOST_REASON_TAGS]) expect(groupOf(t, {})).not.toBe('ยังไม่จัดกลุ่ม')
   })
 })
 

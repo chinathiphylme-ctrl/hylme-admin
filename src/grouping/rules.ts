@@ -3,7 +3,11 @@ export type Group = string
 // indexes 6 and 7 are the "lost" stages
 export const STAGE_GROUPS = ['เริ่มสนใจ', 'ติดเรื่องราคา', 'ลังเล', 'พร้อมสั่ง', 'ปิดการขาย', 'ออเดอร์ค้าง/มีปัญหา', 'เงียบหาย', 'ไม่ซื้อ'] as const
 
-export const ALL_GROUPS: string[] = ['ยังไม่จัดกลุ่ม', ...STAGE_GROUPS, 'ที่มาลูกค้า', 'โฆษณา', 'สินค้า', 'เรื่องสุขภาพ', 'การชำระเงิน', 'สะสมแต้ม', 'แอดมิน', 'อื่นๆ']
+export const ALL_GROUPS: string[] = ['ยังไม่จัดกลุ่ม', ...STAGE_GROUPS, 'เหตุผลที่ซื้อ', 'เหตุผลที่ไม่ซื้อ', 'ที่มาลูกค้า', 'โฆษณา', 'สินค้า', 'เรื่องสุขภาพ', 'การชำระเงิน', 'สะสมแต้ม', 'แอดมิน', 'อื่นๆ']
+
+// tags admins add to say why a customer bought or did not buy; the เสียงลูกค้า tab counts them per chat
+export const BUY_REASON_TAGS = ['ส่วนผสม', 'เคยใช้และพอใจ', 'รีวิวจากผู้ใช้', 'คุณภาพสินค้า', 'มีคนแนะนำ', 'ดูแลสุขภาพ', 'โปรโมชั่น', 'มาตรฐาน/แหล่งผล']
+export const LOST_REASON_TAGS = ['ราคาแพง', 'ติดราคา', 'ขอคิดดูก่อน', 'ข้อมูลไม่เพียงพ', 'ไม่ตรงความต้องก', 'เปรียบเทียบแบรน', 'ขาดความมั่นใจ', 'รอโปร', '7.เปรียบเทียบราคา', 'ไม่สนใจ']
 
 const BY_NUMBER: Record<string, Group> = {
   1: 'เริ่มสนใจ', 4: 'เริ่มสนใจ',
@@ -16,7 +20,11 @@ const BY_NUMBER: Record<string, Group> = {
 export const CLOSE_TAGS = { ads: 'ปิดAds', organic: 'ปิดOrganic', unspecified: 'ปิด' } as const
 export const isCloseTag = (t: string) => Object.values(CLOSE_TAGS).includes(t.trim() as never)
 
+// names below win: ไม่สนใจ stays in the ไม่ซื้อ stage (and 7.เปรียบเทียบราคา in ติดเรื่องราคา by its number),
+// so the "ลูกค้าติดตรงไหน" counts do not change
 const BY_NAME: Record<string, Group> = {
+  ...Object.fromEntries(BUY_REASON_TAGS.map(t => [t, 'เหตุผลที่ซื้อ'])),
+  ...Object.fromEntries(LOST_REASON_TAGS.map(t => [t, 'เหตุผลที่ไม่ซื้อ'])),
   'ปิด': 'ปิดการขาย', 'ปิดAds': 'ปิดการขาย', 'ปิดOrganic': 'ปิดการขาย',
   'รอ': 'ออเดอร์ค้าง/มีปัญหา', 'ตรวจสอบ': 'ออเดอร์ค้าง/มีปัญหา', 'ยกเลิก': 'ออเดอร์ค้าง/มีปัญหา', 'โอนเงินคืน': 'ออเดอร์ค้าง/มีปัญหา',
   'ไม่เปิดอ่าน': 'เงียบหาย', 'อ่านไม่ตอบ': 'เงียบหาย',
