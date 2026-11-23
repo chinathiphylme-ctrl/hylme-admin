@@ -3,7 +3,7 @@ import { pageName } from '../../config/pages'
 import { deleteLead, linkOrder, recordRound, setStatus, skipRound, unlinkOrder } from '../../data/followup'
 import { orderLive, type OrderLink, type Staff } from '../../followup/report'
 import {
-  bangkokToday, dueDay, eventBy, GOALS, nextRound, OFFSETS, RESULT_LABEL, ROUNDS, STATUS_LABEL, stateOf,
+  bangkokToday, eventBy, GOALS, nextDue, planDays, RESULT_LABEL, STATUS_LABEL, stateOf,
   type FuEvent, type FuLead, type LeadStatus, type RoundResult,
 } from '../../followup/schedule'
 import type { OrderRow } from '../../parse/types'
@@ -20,7 +20,7 @@ const RESULTS: [RoundResult, string][] = [['sent', 'ส่งข้อมูล�
 export function LeadDrawer({ lead, events, links, orders, staff, onClose, onEdit, onSaved }: Props) {
   const today = bangkokToday()
   const st = stateOf(lead, events, today)
-  const round = lead.status === 'active' ? nextRound(events) : null
+  const next = lead.status === 'active' ? nextDue(lead, events) : null
   const nameOf = (id: string | null) => staff.find(s => s.id === id)?.name ?? '—'
   const safeUrl = /^https?:\/\//i.test(lead.chatUrl) ? lead.chatUrl : ''
   const [busy, setBusy] = useState(false)
@@ -42,7 +42,7 @@ export function LeadDrawer({ lead, events, links, orders, staff, onClose, onEdit
       <div className="facts">
         <div>เพจ<b>{lead.pageId ? pageName(lead.pageId) : 'ไม่ระบุ'}</b></div>
         <div>เหตุผลที่ยังไม่ซื้อ<b>{lead.objection || 'ยังไม่ระบุ'}</b></div>
-        <div>รอบถัดไป<b>{round ? `รอบ ${round} · ${dayYear(dueDay(lead.firstDay, round))}` : '—'}</b></div>
+        <div>รอบถัดไป<b>{next ? `รอบ ${next.round} · ${dayYear(next.due)}` : '—'}</b></div>
         {lead.notes && <div style={{ gridColumn: '1 / -1' }}>บันทึก<b style={{ fontWeight: 400, whiteSpace: 'pre-wrap' }}>{lead.notes}</b></div>}
       </div>
       <div className="actions" style={{ justifyContent: 'flex-start' }}>
@@ -50,11 +50,11 @@ export function LeadDrawer({ lead, events, links, orders, staff, onClose, onEdit
         <button type="button" className="btn-ghost" onClick={onEdit}>แก้ไขข้อมูล</button>
       </div>
 
-      <RoundStrip lead={lead} events={events} next={round} today={today} />
+      <RoundStrip lead={lead} events={events} today={today} />
 
       {error && <p className="msg-err" role="alert">{error}</p>}
 
-      {round && <RecordPanel key={`${lead.id}-${lead.version}`} lead={lead} round={round} busy={busy} run={run} />}
+      {next && <RecordPanel key={`${lead.id}-${lead.version}`} lead={lead} round={next.round} due={next.due} busy={busy} run={run} />}
 
       <StatusPanel key={`s-${lead.id}-${lead.version}`} lead={lead} busy={busy} run={run} />
 
@@ -107,44 +107,44 @@ function describe(e: FuEvent): string {
   }
 }
 
-function RoundStrip({ lead, events, next, today }: { lead: FuLead; events: FuEvent[]; next: number | null; today: string }) {
+// done rounds show the day they were saved; the next its due day; later ones an estimate if each is done on time
+function RoundStrip({ lead, events, today }: { lead: FuLead; events: FuEvent[]; today: string }) {
+  const active = lead.status === 'active'
   return (
     <section className="stack" style={{ gap: 8 }}>
       <h3 className="section-title" style={{ fontSize: 15 }}>เส้นทางติดตาม 7 รอบ</h3>
       <div className="rounds">
-        {ROUNDS.map(r => {
-          const e = events.find(x => (x.kind === 'round' || x.kind === 'skip') && x.roundNo === r)
-          const due = dueDay(lead.firstDay, r)
-          const cls = e ? (e.kind === 'skip' ? 'skip' : 'done') : r === next ? (due < today ? 'late' : 'next') : ''
+        {planDays(lead, events).map(({ round: r, day, kind }) => {
+          const cls = kind === 'skip' ? 'skip' : kind === 'done' ? 'done' : kind === 'next' && active ? (day < today ? 'late' : 'next') : ''
           return (
             <div key={r} className={`rnd ${cls}`} title={GOALS[r - 1]}>
               <b>รอบ {r}</b>
-              <span>วัน {OFFSETS[r - 1]}</span>
-              <span style={{ display: 'block' }}>{thaiDay(due)}</span>
-              {e && <span style={{ display: 'block', fontWeight: 600 }}>{e.kind === 'skip' ? 'ข้าม' : '✓'}</span>}
+              <span>{kind === 'done' || kind === 'skip' ? 'ทำเมื่อ' : kind === 'next' && active ? 'กำหนด' : 'ประมาณ'}</span>
+              <span style={{ display: 'block' }}>{thaiDay(day)}</span>
+              {(kind === 'done' || kind === 'skip') && <span style={{ display: 'block', fontWeight: 600 }}>{kind === 'skip' ? 'ข้าม' : '✓'}</span>}
             </div>
           )
         })}
       </div>
+      {active && <p className="small">รอบถัดไปนับจากวันที่บันทึกรอบก่อนหน้า วันที่ “ประมาณ” คิดว่าตามตรงวันทุกรอบ</p>}
     </section>
   )
 }
 
 type Run = (fn: () => Promise<unknown>, msg: string) => Promise<void>
 
-function RecordPanel({ lead, round, busy, run }: { lead: FuLead; round: number; busy: boolean; run: Run }) {
+function RecordPanel({ lead, round, due, busy, run }: { lead: FuLead; round: number; due: string; busy: boolean; run: Run }) {
   const [result, setResult] = useState<RoundResult | null>(null)
   const [note, setNote] = useState('')
   const [order, setOrder] = useState('')
   const [skipping, setSkipping] = useState(false)
   const [reason, setReason] = useState('')
-  const due = dueDay(lead.firstDay, round)
   const label = (r: RoundResult) => RESULTS.find(x => x[0] === r)![1]
   return (
     <section className="panel-soft" aria-label="บันทึกผลการติดตาม">
       <div className="stack" style={{ gap: 2 }}>
         <h3>บันทึกผลการติดตาม รอบ {round}</h3>
-        <span className="small">รอบ {round} / วันที่ {OFFSETS[round - 1]} · กำหนด {dayYear(due)} · {GOALS[round - 1]}</span>
+        <span className="small">รอบ {round} · กำหนด {dayYear(due)} · {GOALS[round - 1]}</span>
       </div>
       <div className="results" role="group" aria-label="ผลการติดตาม">
         {RESULTS.map(([k, text]) => (

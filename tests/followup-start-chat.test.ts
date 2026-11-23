@@ -1,4 +1,4 @@
-// Runs 0005 + 0006 + 0008 in PGlite with stand-ins for the 0001 tables they read, then checks how a silent chat
+// Runs 0005 + 0006 + 0008 + 0009 in PGlite with stand-ins for the 0001 tables they read, then checks how a silent chat
 // from the follow list enters the queue when someone records a result for it (fu_start_chat).
 import { PGlite } from '@electric-sql/pglite'
 import { readFileSync } from 'node:fs'
@@ -82,6 +82,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync('supabase/migrations/0005_followup.sql', 'utf8'))
   await pg.exec(readFileSync('supabase/migrations/0006_followup_sync.sql', 'utf8'))
   await pg.exec(readFileSync('supabase/migrations/0008_followup_start_chat.sql', 'utf8'))
+  await pg.exec(readFileSync('supabase/migrations/0009_followup_count_from_done.sql', 'utf8'))
   await pg.exec(`insert into auth.users values ('${TEAM}'), ('${STRANGER}'); insert into fu_team values ('${TEAM}');`)
   const ids = Object.fromEntries((await q<{ id: string; name: string }>('select id, name from staff')).map(r => [r.name, r.id]))
   KOY = ids['พี่ก้อย']; NOON = ids['นุ่น']; GM = ids['GM']
@@ -97,7 +98,7 @@ const start = (actor: string, conv: string, result: string, note = '', order = '
 const rounds = async (lead: string) => (await events(lead)).filter(e => e.kind === 'round' || e.kind === 'skip')
 
 describe('start following a silent chat', () => {
-  it('adds the chat like the sync does, with day 1 = its first file day, and records the result as the next round', async () => {
+  it('adds the chat like the sync does, with day 1 = its first file day, and records the result as round 1', async () => {
     await chat('c1234', day(-3), ['ขอราคา', 'มะกอก'])
     await chat('c1234', day(0), ['2.ขอราคา', 'มะกอก', 'อ่านไม่ตอบ'])
     const id = await start(KOY, 'c1234', 'waiting', 'ส่งราคาแล้ว')
@@ -108,10 +109,9 @@ describe('start following a silent chat', () => {
     })
     const evs = await events(id)
     expect(evs[0]).toMatchObject({ kind: 'create', note: 'เริ่มติดตามจากแชทเงียบ', by: KOY })
-    // day 1 = day(-3): round 1 (day 2) was due yesterday → skipped by the system; round 2 (day 5) is the one recorded
+    // day 1 = day(-3), but the customer entered today: no skipped rounds, round 1 is recorded and was due today
     expect(await rounds(id)).toEqual([
-      expect.objectContaining({ kind: 'skip', round_no: 1, note: 'เข้าระบบทีหลัง', by: null }),
-      expect.objectContaining({ kind: 'round', round_no: 2, result: 'waiting', note: 'ส่งราคาแล้ว', by: KOY }),
+      expect.objectContaining({ kind: 'round', round_no: 1, result: 'waiting', note: 'ส่งราคาแล้ว', by: KOY, due_day: day(0) }),
     ])
   })
 
@@ -153,18 +153,51 @@ describe('start following a silent chat', () => {
     expect(owners).toEqual({ m1: NOON, m2: KOY })
   })
 
-  it('a chat first seen over 59 days ago still has round 7 open', async () => {
+  it('a chat first seen long ago still starts at round 1, with its real first day', async () => {
     await chat('old1', day(-80), ['2.ขอราคา'])
     const id = await start(KOY, 'old1', 'sent')
-    expect((await leads())[0].first_day).toBe(day(-59))
-    const rs = await rounds(id)
-    expect(rs.filter(e => e.kind === 'skip').map(e => e.round_no)).toEqual([1, 2, 3, 4, 5, 6])
-    expect(rs.at(-1)).toMatchObject({ kind: 'round', round_no: 7 })
+    expect((await leads())[0].first_day).toBe(day(-80))
+    expect((await rounds(id)).map(e => [e.kind, e.round_no])).toEqual([['round', 1]])
   })
+
 
   it('is refused for someone not on the team or signed out', async () => {
     await chat('s1', day(0), ['2.ขอราคา'])
     await expect(start(KOY, 's1', 'sent', '', '', STRANGER)).rejects.toThrow('ยังไม่ได้รับสิทธิ์')
     await expect(start(KOY, 's1', 'sent', '', '', null)).rejects.toThrow()
+  })
+})
+
+describe('rounds count from the day the round before was done (0009)', () => {
+  const lead = async () => (await leads())[0]
+  it('stores the due day counted from the saved day of the round before', async () => {
+    await chat('n1', day(-10), ['2.ขอราคา'])
+    const id = await start(KOY, 'n1', 'sent')
+    // round 1 was really done 5 days ago → round 2 is due 2 days ago (+3), not on the fixed day 5
+    await pg.query(`update fu_events set at = now() - interval '5 days' where lead_id = $1 and round_no = 1`, [id])
+    await team('select fu_record_round($1, $2, $3, 2, $4, $5, null)', [KOY, id, (await lead()).version, 'sent', ''])
+    await team('select fu_skip_round($1, $2, $3, 3, $4)', [KOY, id, (await lead()).version, 'ลูกค้าไม่สะดวก'])
+    expect((await rounds(id)).map(e => [e.round_no, e.due_day])).toEqual([[1, day(0)], [2, day(-2)], [3, day(2)]])
+  })
+
+  it('removes old system skips only where nothing but system skips comes after them', async () => {
+    const file = readFileSync('supabase/migrations/0009_followup_count_from_done.sql', 'utf8')
+    const cleanup = file.slice(file.indexOf('with gone as ('), file.indexOf(';', file.indexOf('with gone as (')) + 1)
+    await chat('a1', day(-20), ['2.ขอราคา'])
+    await chat('b1', day(-20), ['2.ขอราคา'])
+    const a = await start(KOY, 'a1', 'sent')
+    const b = await start(KOY, 'b1', 'sent')
+    // a: rounds 1–3 skipped by the system, nothing after; b: rounds 1–2 skipped by the system, then round 3 by a person
+    await pg.query(`delete from fu_events where kind = 'round'`)
+    for (const [id, n] of [[a, 3], [b, 2]] as const) {
+      await pg.query(`insert into fu_events (lead_id, kind, round_no, note) select $1, 'skip', g, 'เข้าระบบทีหลัง' from generate_series(1, $2::int) g`, [id, n])
+    }
+    await pg.query(`insert into fu_events (lead_id, kind, round_no, result, by) values ($1, 'round', 3, 'sent', $2)`, [b, KOY])
+    const before = Object.fromEntries((await leads()).map(l => [l.id, l.version]))
+    await pg.exec(cleanup)
+    expect(await rounds(a)).toEqual([])
+    expect((await rounds(b)).map(e => [e.kind, e.round_no])).toEqual([['skip', 1], ['skip', 2], ['round', 3]])
+    const after = Object.fromEntries((await leads()).map(l => [l.id, l.version]))
+    expect([after[a] - before[a], after[b] - before[b]]).toEqual([1, 0])
   })
 })

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { notQueued, silentByDay, silentReport } from '../src/followup/silent'
-import { firstRound } from '../src/ui/followup/SilentChats'
 import type { FuEvent, FuLead } from '../src/followup/schedule'
 import type { FollowItem } from '../src/metrics/conversations'
 import type { ConvRow } from '../src/parse/types'
@@ -55,11 +54,5 @@ describe('silent chats', () => {
     expect(silentReport(by, leads, events, range, FAT, 'all')).toEqual({ listed: 1, followed: 1, won: 0 })
     // the admin filter narrows followed/won; every listed chat still counts
     expect(silentReport(by, leads, events, range, 'all', 'noon')).toEqual({ listed: 4, followed: 1, won: 0 })
-  })
-
-  it('firstRound matches fu_start_chat: past rounds skipped, day 1 no older than today − 59', () => {
-    expect(firstRound('2026-11-19', '2026-11-20')).toEqual({ firstDay: '2026-11-19', round: 1 }) // round 1 due 20/11
-    expect(firstRound('2026-11-17', '2026-11-20')).toEqual({ firstDay: '2026-11-17', round: 2 }) // round 1 was 18/11
-    expect(firstRound('2026-08-01', '2026-11-20')).toEqual({ firstDay: '2026-09-22', round: 7 })
   })
 })

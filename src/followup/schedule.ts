@@ -1,7 +1,8 @@
 import type { PageId } from '../config/pages'
 import { addDays } from '../metrics/range'
 
-// brief p.9: day 1 is the first chat; the rounds fall on these days and never move
+// brief p.9: day 1 is the first chat and the rounds fall on days 2/5/7/14/30/45/60. Since 2026-11-23 the owner counts
+// each round from the day the round before was actually done, keeping the brief's gaps (spec 2026-11-23-followup-count-from-done)
 export const OFFSETS = [2, 5, 7, 14, 30, 45, 60] as const
 export const ROUNDS = [1, 2, 3, 4, 5, 6, 7] as const
 export const GOALS = [
@@ -45,7 +46,52 @@ export type FuEvent = {
 export const eventBy = (by: string | null, staff: { id: string; name: string }[]) =>
   by === null ? 'ระบบ' : staff.find(s => s.id === by)?.name ?? '—'
 
+// the brief's fixed day: the example plan, and the fallback when a date is missing
 export const dueDay = (firstDay: string, round: number) => addDays(firstDay, OFFSETS[round - 1] - 1)
+
+// days from the round before (round 1: from the first chat)
+export const GAPS = OFFSETS.map((o, i) => (i === 0 ? o - 1 : o - OFFSETS[i - 1]))
+
+// the Bangkok day a row was saved; null for a missing or broken timestamp
+const savedDay = (at: string): string | null => {
+  const t = Date.parse(at)
+  return Number.isNaN(t) ? null : bangkokToday(new Date(t))
+}
+
+const roundRow = (events: FuEvent[], r: number) => events.find(e => (e.kind === 'round' || e.kind === 'skip') && e.roundNo === r)
+
+// as fu_round_due: round 1 is day 2, or the day the customer entered the queue if later;
+// a later round is the day the round before was saved plus the gap
+function dueOf(lead: FuLead, events: FuEvent[], r: number): string {
+  if (r === 1) {
+    const entered = savedDay(lead.createdAt)
+    const day2 = addDays(lead.firstDay, GAPS[0])
+    return entered && entered > day2 ? entered : day2
+  }
+  const prev = roundRow(events, r - 1)
+  const d = prev ? savedDay(prev.at) : null
+  return d ? addDays(d, GAPS[r - 1]) : dueDay(lead.firstDay, r)
+}
+
+export function nextDue(lead: FuLead, events: FuEvent[]): { round: number; due: string } | null {
+  const r = nextRound(events)
+  return r === null ? null : { round: r, due: dueOf(lead, events, r) }
+}
+
+export type PlanDay = { round: number; day: string; kind: 'done' | 'skip' | 'next' | 'plan' }
+
+// done and skipped rounds on the day saved; the next one on its due day; the rest estimated as if each is done on time
+export function planDays(lead: FuLead, events: FuEvent[]): PlanDay[] {
+  const next = nextDue(lead, events)
+  let last = ''
+  return ROUNDS.map(r => {
+    const e = roundRow(events, r)
+    if (e) return { round: r, day: savedDay(e.at) ?? e.dueDay ?? dueDay(lead.firstDay, r), kind: e.kind === 'skip' ? 'skip' : 'done' }
+    if (next && r === next.round) return { round: r, day: (last = next.due), kind: 'next' }
+    last = last ? addDays(last, GAPS[r - 1]) : dueDay(lead.firstDay, r)
+    return { round: r, day: last, kind: 'plan' }
+  })
+}
 
 export function nextRound(events: FuEvent[]): number | null {
   const done = new Set(events.filter(e => e.kind === 'round' || e.kind === 'skip').map(e => e.roundNo))
@@ -54,9 +100,9 @@ export function nextRound(events: FuEvent[]): number | null {
 
 export function stateOf(lead: FuLead, events: FuEvent[], today: string): State {
   if (lead.status !== 'active') return lead.status
-  const r = nextRound(events)
-  if (r === null) return 'completed'
-  const d = dueDay(lead.firstDay, r)
+  const n = nextDue(lead, events)
+  if (n === null) return 'completed'
+  const d = n.due
   return d < today ? 'overdue' : d === today ? 'due' : 'waiting'
 }
 
@@ -81,9 +127,9 @@ export function queue(leads: FuLead[], events: FuEvent[], today: string): QueueR
   for (const lead of leads) {
     const evs = by.get(lead.id) ?? []
     const state = stateOf(lead, evs, today)
-    const round = nextRound(evs)
-    if (!isOpen(state) || round === null) continue
-    const due = dueDay(lead.firstDay, round)
+    const n = nextDue(lead, evs)
+    if (!isOpen(state) || n === null) continue
+    const { round, due } = n
     rows.push({ lead, events: evs, state, round, due, daysLate: Math.max(0, daysBetween(due, today)) })
   }
   return rows.sort((a, b) => RANK[a.state] - RANK[b.state] || a.due.localeCompare(b.due) || a.lead.name.localeCompare(b.lead.name, 'th'))

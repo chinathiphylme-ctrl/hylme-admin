@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  bangkokToday, dueDay, eventBy, nextRound, queue, RESULT_LABEL, stateOf, type FuEvent, type FuLead,
+  bangkokToday, dueDay, eventBy, GAPS, nextDue, nextRound, planDays, queue, RESULT_LABEL, stateOf, type FuEvent, type FuLead,
 } from '../src/followup/schedule'
 
 const lead = (o: Partial<FuLead> = {}): FuLead => ({
@@ -39,10 +39,10 @@ describe('next round', () => {
 
 describe('state', () => {
   const today = '2026-11-17'
-  it('is due on the due day and overdue after, and the due day does not move when late', () => {
-    expect(stateOf(lead(), [ev(1)], today)).toBe('due') // round 2 due 17 Nov
+  it('is due on the due day and overdue after', () => {
+    expect(stateOf(lead(), [ev(1)], today)).toBe('due') // round 1 saved 14 Nov → round 2 due 17 Nov
     expect(stateOf(lead(), [], today)).toBe('overdue') // round 1 was due 14 Nov
-    expect(stateOf(lead(), [ev(1), ev(2)], today)).toBe('waiting') // round 3 due 19 Nov
+    expect(stateOf(lead(), [ev(1), { ...ev(2), at: '2026-11-17T03:00:00Z' }], today)).toBe('waiting') // round 2 saved 17 Nov → round 3 due 19 Nov
   })
   it('stops for won, opt-out and pause whatever the dates', () => {
     expect(stateOf(lead({ status: 'won' }), [], today)).toBe('won')
@@ -51,6 +51,44 @@ describe('state', () => {
   })
   it('is completed after 7 rounds', () => {
     expect(stateOf(lead(), [1, 2, 3, 4, 5, 6, 7].map(r => ev(r)), today)).toBe('completed')
+  })
+})
+
+describe('count from the day done (2026-11-23)', () => {
+  const at = (day: string) => `${day}T05:00:00Z`
+  const done = (r: number, day: string, kind: FuEvent['kind'] = 'round'): FuEvent => ({ ...ev(r, kind), at: at(day) })
+  it('keeps the brief gaps', () => {
+    expect(GAPS).toEqual([1, 3, 2, 7, 16, 15, 15])
+  })
+  it('counts the next round from the day the round before was saved', () => {
+    // first chat 17 Nov, round 1 due 18 Nov but done 23 Nov → round 2 due 26 Nov, not 21 Nov
+    const l = lead({ firstDay: '2026-11-17', createdAt: at('2026-11-17') })
+    expect(nextDue(l, [done(1, '2026-11-23')])).toEqual({ round: 2, due: '2026-11-26' })
+    expect(nextDue(l, [done(1, '2026-11-23'), done(2, '2026-11-27', 'skip')])).toEqual({ round: 3, due: '2026-11-29' })
+    expect(stateOf(l, [done(1, '2026-11-23')], '2026-11-23')).toBe('waiting')
+    expect(nextDue(l, [1, 2, 3, 4, 5, 6, 7].map(r => done(r, '2026-11-23')))).toBeNull()
+  })
+  it('round 1 is day 2 on time, and the entry day when the customer entered late', () => {
+    expect(nextDue(lead({ firstDay: '2026-11-17', createdAt: at('2026-11-17') }), [])).toEqual({ round: 1, due: '2026-11-18' })
+    expect(nextDue(lead({ firstDay: '2026-11-17', createdAt: at('2026-11-18') }), [])).toEqual({ round: 1, due: '2026-11-18' })
+    expect(nextDue(lead({ firstDay: '2026-10-20', createdAt: at('2026-11-23') }), [])).toEqual({ round: 1, due: '2026-11-23' })
+  })
+  it('uses the Bangkok day of the save', () => {
+    const l = lead({ firstDay: '2026-11-17', createdAt: at('2026-11-17') })
+    expect(nextDue(l, [{ ...ev(1), at: '2026-11-22T17:30:00Z' }])).toEqual({ round: 2, due: '2026-11-26' }) // 00:30 on 23 Nov
+  })
+  it('falls back to the fixed day when a date is missing', () => {
+    expect(nextDue(lead(), [{ ...ev(1), at: '' }])).toEqual({ round: 2, due: dueDay('2026-11-13', 2) })
+    expect(nextDue(lead({ createdAt: 'x' }), [])).toEqual({ round: 1, due: '2026-11-14' })
+  })
+  it('plans later rounds from the next due day, done rounds on the day saved', () => {
+    const l = lead({ firstDay: '2026-11-17', createdAt: at('2026-11-17') })
+    expect(planDays(l, [done(1, '2026-11-23')])).toEqual([
+      { round: 1, day: '2026-11-23', kind: 'done' }, { round: 2, day: '2026-11-26', kind: 'next' },
+      { round: 3, day: '2026-11-28', kind: 'plan' }, { round: 4, day: '2026-12-05', kind: 'plan' },
+      { round: 5, day: '2026-12-21', kind: 'plan' }, { round: 6, day: '2027-01-05', kind: 'plan' },
+      { round: 7, day: '2027-01-20', kind: 'plan' },
+    ])
   })
 })
 

@@ -108,12 +108,8 @@ export function App() {
     const grades = new Map((base?.leads ?? []).map(l => [l.conversationId, gradeOf(l)]))
     return followList(base?.latestConvs ?? [], grades)
   }, [base])
-  // the follow list lives in the follow-up tab: only chats nobody has put in the queue, with day 1 of each
-  const silent = useMemo((): SilentItem[] => {
-    if (fu.status !== 'ready' || !base) return []
-    const start = new Map(base.leads.map(l => [l.conversationId, l.startDay]))
-    return notQueued(follow, fu.leads).map(f => ({ ...f, startDay: start.get(f.conversationId) ?? f.day }))
-  }, [follow, fu, base])
+  // the follow list lives in the follow-up tab: only chats nobody has put in the queue
+  const silent = useMemo((): SilentItem[] => (fu.status === 'ready' && base ? notQueued(follow, fu.leads) : []), [follow, fu, base])
   const silentDays = useMemo(() => {
     if (!base) return new Map()
     return silentByDay(base.allConvs, new Map(base.leads.map(l => [l.conversationId, gradeOf(l)])))

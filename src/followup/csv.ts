@@ -1,5 +1,5 @@
 import { pageName, type PageId } from '../config/pages'
-import { dueDay, nextRound, STATE_LABEL, stateOf, type FuEvent, type FuLead, type LeadStatus } from './schedule'
+import { nextDue, STATE_LABEL, stateOf, type FuEvent, type FuLead, type LeadStatus } from './schedule'
 
 export function parseCsv(input: string): string[][] {
   const rows: string[][] = []
@@ -33,9 +33,9 @@ export function exportCsv(leads: FuLead[], events: FuEvent[], names: Map<string,
   const head = ['ชื่อ/รหัสลูกค้า', 'สินค้า', 'ผู้ดูแล', 'เพจ', 'ลิงก์แชต', 'วันที่คุยครั้งแรก', 'เหตุผลที่ยังไม่ซื้อ', 'บันทึก', 'สถานะ', 'รอบถัดไป', 'วันติดตามถัดไป', 'ติดตามแล้ว (ครั้ง)']
   const rows = leads.map(l => {
     const evs = events.filter(e => e.leadId === l.id)
-    const r = l.status === 'active' ? nextRound(evs) : null
+    const n = l.status === 'active' ? nextDue(l, evs) : null
     return [l.name, l.product, names.get(l.ownerId) ?? '', l.pageId ? pageName(l.pageId) : '', l.chatUrl, l.firstDay, l.objection, l.notes,
-      STATE_LABEL[stateOf(l, evs, today)], r ?? '', r ? dueDay(l.firstDay, r) : '', evs.filter(e => e.kind === 'round').length]
+      STATE_LABEL[stateOf(l, evs, today)], n?.round ?? '', n?.due ?? '', evs.filter(e => e.kind === 'round').length]
   })
   return '﻿' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n')
 }

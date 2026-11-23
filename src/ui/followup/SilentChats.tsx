@@ -1,26 +1,19 @@
 import { useCallback, useState } from 'react'
 import { pageName } from '../../config/pages'
 import { startFromChat } from '../../data/followup'
-import { addDays } from '../../metrics/range'
-import { dueDay, GOALS, OFFSETS, ROUNDS, type RoundResult } from '../../followup/schedule'
+import { GOALS, type RoundResult } from '../../followup/schedule'
 import type { FollowItem, Stage } from '../../metrics/conversations'
 import { GradePill } from '../LeadGrades'
 import { thaiDay } from '../viewModel'
-import { dayYear, errText, Modal } from './common'
+import { errText, Modal } from './common'
 
-// a silent chat plus the first day it showed up in a message file (day 1 of its follow-up)
-export type SilentItem = FollowItem & { startDay: string }
+// a silent chat nobody has put in the queue; recording a result adds it at round 1
+export type SilentItem = FollowItem
 
 const STAGES: (Stage | 'all')[] = ['all', 'พร้อมสั่ง', 'ลังเล', 'ขอโปร', 'ขอราคา']
 const RESULTS: [RoundResult, string][] = [['sent', 'ส่งข้อมูลแล้ว'], ['waiting', 'รอลูกค้าตอบ'], ['won', 'ซื้อแล้ว'], ['optout', 'ขอหยุดติดต่อ']]
 
-// as fu_start_chat: day 1 is never older than today − 59; rounds already past are skipped
-export function firstRound(startDay: string, today: string): { firstDay: string; round: number } {
-  const firstDay = startDay < addDays(today, -59) ? addDays(today, -59) : startDay
-  return { firstDay, round: ROUNDS.find(r => dueDay(firstDay, r) >= today) ?? 7 }
-}
-
-export function SilentChats({ items, today, onSaved }: { items: SilentItem[]; today: string; onSaved: (msg: string) => Promise<void> }) {
+export function SilentChats({ items, onSaved }: { items: SilentItem[]; onSaved: (msg: string) => Promise<void> }) {
   const [stage, setStage] = useState<Stage | 'all'>('all')
   const [open, setOpen] = useState<SilentItem | null>(null)
   const close = useCallback(() => setOpen(null), [])
@@ -72,18 +65,17 @@ export function SilentChats({ items, today, onSaved }: { items: SilentItem[]; to
           </div>
         ))}
       </div>
-      {open && <StartModal item={open} today={today} onClose={close} onSaved={onSaved} />}
+      {open && <StartModal item={open} onClose={close} onSaved={onSaved} />}
     </section>
   )
 }
 
-function StartModal({ item, today, onClose, onSaved }: { item: SilentItem; today: string; onClose: () => void; onSaved: (msg: string) => Promise<void> }) {
+function StartModal({ item, onClose, onSaved }: { item: SilentItem; onClose: () => void; onSaved: (msg: string) => Promise<void> }) {
   const [result, setResult] = useState<RoundResult | null>(null)
   const [note, setNote] = useState('')
   const [order, setOrder] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { firstDay, round } = firstRound(item.startDay, today)
   const save = async () => {
     if (!result) return
     setBusy(true)
@@ -91,7 +83,7 @@ function StartModal({ item, today, onClose, onSaved }: { item: SilentItem; today
     try {
       await startFromChat(item.conversationId, result, note, order)
       onClose()
-      await onSaved(`เข้าคิวแล้ว · รอบ ${round}: ${RESULTS.find(r => r[0] === result)![1]}`)
+      await onSaved(`เข้าคิวแล้ว · รอบ 1: ${RESULTS.find(r => r[0] === result)![1]}`)
     } catch (e) {
       setError(errText(e))
     } finally {
@@ -101,8 +93,7 @@ function StartModal({ item, today, onClose, onSaved }: { item: SilentItem; today
   return (
     <Modal title={`${pageName(item.pageId)} · ${item.product}`} eyebrow="บันทึกผลการตาม · แชทเงียบ" onClose={onClose}>
       <p className="small">
-        เริ่มคุย {dayYear(firstDay)} · บันทึกเป็นรอบ {round} / วันที่ {OFFSETS[round - 1]} · {GOALS[round - 1]}
-        {round > 1 && ' (รอบก่อนหน้าเลยกำหนดแล้ว ระบบข้ามให้ว่า “เข้าระบบทีหลัง”)'}
+        บันทึกเป็นรอบ 1 · {GOALS[0]} · รอบ 2 จะนับจากวันนี้ไปอีก 3 วัน
       </p>
       <div className="results" role="group" aria-label="ผลการติดตาม">
         {RESULTS.map(([k, text]) => (

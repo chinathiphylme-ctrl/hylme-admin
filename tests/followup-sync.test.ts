@@ -81,6 +81,7 @@ beforeAll(async () => {
   await pg.exec(BASE_STUB)
   await pg.exec(readFileSync('supabase/migrations/0005_followup.sql', 'utf8'))
   await pg.exec(readFileSync('supabase/migrations/0006_followup_sync.sql', 'utf8'))
+  await pg.exec(readFileSync('supabase/migrations/0009_followup_count_from_done.sql', 'utf8'))
   await pg.exec(`insert into auth.users values ('${TEAM}'), ('${STRANGER}'); insert into fu_team values ('${TEAM}');`)
   const ids = Object.fromEntries((await q<{ id: string; name: string }>('select id, name from staff')).map(r => [r.name, r.id]))
   KOY = ids['พี่ก้อย']; NOON = ids['นุ่น']
@@ -237,13 +238,12 @@ describe('later syncs read the tags', () => {
     expect(rounds.map(e => [e.round_no, e.result, e.by])).toEqual([[1, 'sent', KOY], [2, 'tag', null]])
   })
 
-  it('late entry skips past-due rounds once', async () => {
+  it('late entry skips nothing: the customer starts at round 1 (0009)', async () => {
     await chat('l1', day(-10), ['ติดตาม'])
-    expect(await sync()).toMatchObject({ added: 1, skipped: 3 })
+    expect(await sync()).toMatchObject({ added: 1, skipped: 0 })
     const l = await only('l1')
-    const skips = (await events(l.id)).filter(e => e.kind === 'skip')
-    expect(skips.map(e => [e.round_no, e.note, e.by])).toEqual([[1, 'เข้าระบบทีหลัง', null], [2, 'เข้าระบบทีหลัง', null], [3, 'เข้าระบบทีหลัง', null]])
-    expect(await sync()).toMatchObject({ skipped: 0 })
+    expect((await events(l.id)).filter(e => e.kind === 'skip')).toEqual([])
+    expect((await q<{ d: string }>(`select to_char(fu_round_due($1, 1), 'YYYY-MM-DD') d`, [l.id]))[0].d).toBe(day(0))
     // a customer already in the queue whose round becomes overdue stays overdue
     await chat('l2', day(0), ['ติดตาม'])
     await sync()

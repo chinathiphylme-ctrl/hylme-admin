@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import { pageName } from '../../config/pages'
 import { exportCsv } from '../../followup/csv'
 import {
-  bangkokToday, dueDay, GOALS, groupEvents, isOpen, nextRound, OFFSETS, queue, ROUNDS, stateOf, stateRank, type FuLead,
+  bangkokToday, dueDay, GAPS, GOALS, groupEvents, isOpen, nextDue, OFFSETS, queue, ROUNDS, stateOf, stateRank, type FuLead,
 } from '../../followup/schedule'
+import { wonShare } from '../../followup/share'
 import { addDays } from '../../metrics/range'
 import { thaiDay } from '../viewModel'
 import { dayYear, StatePill, useToast } from './common'
@@ -47,8 +48,10 @@ export function Care({ fu, silent, reload, signOut, switchUser }: {
     due: rows.filter(r => r.state === 'due').length,
     overdue: rows.filter(r => r.state === 'overdue').length,
     open: rows.length,
-    won: fu.leads.filter(l => mine(l) && l.status === 'won').length,
   }
+  // bought out of everyone in the queue: the owner select for the tile; search + owner (not the status select) for the list
+  const share = wonShare(fu.leads.filter(mine))
+  const listShare = wonShare(fu.leads.filter(matches))
   const week = addDays(today, 7)
   const tasks = rows.filter(r => matches(r.lead) && (
     taskFilter === 'all' ? true : taskFilter === 'open' ? r.state !== 'waiting' : taskFilter === 'week' ? r.due <= week : r.state === taskFilter))
@@ -103,12 +106,12 @@ export function Care({ fu, silent, reload, signOut, switchUser }: {
         <Kpi label="ต้องติดตามวันนี้" value={counts.due} color="#5C3A06" />
         <Kpi label="เลยกำหนด" value={counts.overdue} color="#C2410C" />
         <Kpi label="กำลังติดตาม" value={counts.open} />
-        <Kpi label="ซื้อแล้ว" value={counts.won} color="#1F7A4A" />
+        <Kpi label="ซื้อแล้ว" value={share.won} color="#1F7A4A" note={`จาก ${share.total} คนในคิว${share.pct === null ? '' : ` · ${share.pct}%`}`} />
       </div>
 
       {sub === 'today' && (
         <>
-          <SilentChats items={silent} today={today} onSaved={saved} />
+          <SilentChats items={silent} onSaved={saved} />
           <div className="fu-bar">
             <div className="chips" role="group" aria-label="ช่วงงาน">
               {TASK_FILTERS.map(([k, t]) => <button key={k} type="button" className="chip" aria-pressed={taskFilter === k} onClick={() => setTaskFilter(k)}>{t}</button>)}
@@ -160,7 +163,11 @@ export function Care({ fu, silent, reload, signOut, switchUser }: {
             {ownerSelect}
             <button type="button" className="btn-ghost" style={{ minHeight: 44 }} onClick={download} disabled={!listed.length}>↓ ส่งออก CSV</button>
           </div>
-          <p className="small">{listed.length} / {fu.leads.length} ราย</p>
+          <div className="callout" role="status">
+            ตามตัวกรองนี้ <b>{listShare.total}</b> คน · ซื้อแล้ว <b>{listShare.won}</b> คน{listShare.pct === null ? '' : ` · ${listShare.pct}%`}
+            <span className="small" style={{ display: 'block' }}>นับตามช่องค้นหาและผู้ดูแล ไม่ขึ้นกับช่องสถานะ · ซื้อแล้ว = กดบันทึกเอง หรือระบบเห็นแท็กปิดใน Pancake</span>
+          </div>
+          <p className="small">แสดง {listed.length} / {fu.leads.length} ราย</p>
           {listed.length === 0 ? <Empty title="ไม่พบรายชื่อลูกค้า" hint="เปลี่ยนตัวกรอง หรือกดเพิ่มลูกค้า" /> : (
             <>
               <div className="table-wrap fu-table">
@@ -168,7 +175,7 @@ export function Care({ fu, silent, reload, signOut, switchUser }: {
                   <thead><tr><th>ลูกค้า / เพจ</th><th>สินค้าที่สนใจ</th><th>ผู้ดูแล</th><th>เริ่มคุย</th><th>ติดตามถัดไป</th><th>รอบ</th><th>สถานะ</th></tr></thead>
                   <tbody>
                     {listed.map(({ l, evs, st }) => {
-                      const r = l.status === 'active' ? nextRound(evs) : null
+                      const n = l.status === 'active' ? nextDue(l, evs) : null
                       const done = ROUNDS.filter(n => evs.some(e => (e.kind === 'round' || e.kind === 'skip') && e.roundNo === n)).length
                       return (
                         <tr key={l.id} className="click" onClick={() => setOpenId(l.id)}>
@@ -176,7 +183,7 @@ export function Care({ fu, silent, reload, signOut, switchUser }: {
                           <td>{l.product}</td>
                           <td>{nameOf(l.ownerId)}</td>
                           <td className="num">{thaiDay(l.firstDay)}</td>
-                          <td className="num">{r ? thaiDay(dueDay(l.firstDay, r)) : '—'}</td>
+                          <td className="num">{n ? thaiDay(n.due) : '—'}</td>
                           <td className="num">{done}/7</td>
                           <td><StatePill state={st} /></td>
                         </tr>
@@ -187,11 +194,11 @@ export function Care({ fu, silent, reload, signOut, switchUser }: {
               </div>
               <div className="fu-cards">
                 {listed.map(({ l, evs, st }) => {
-                  const r = l.status === 'active' ? nextRound(evs) : null
+                  const n = l.status === 'active' ? nextDue(l, evs) : null
                   return (
                     <button key={l.id} type="button" className="fu-card" onClick={() => setOpenId(l.id)}>
                       <span className="fu-name">{l.name}</span>
-                      <span className="meta">{l.product} · {nameOf(l.ownerId)}{r ? ` · ถัดไป ${thaiDay(dueDay(l.firstDay, r))}` : ''}</span>
+                      <span className="meta">{l.product} · {nameOf(l.ownerId)}{n ? ` · ถัดไป ${thaiDay(n.due)}` : ''}</span>
                       <span className="right"><StatePill state={st} /></span>
                     </button>
                   )
@@ -218,11 +225,12 @@ export function Care({ fu, silent, reload, signOut, switchUser }: {
   )
 }
 
-function Kpi({ label, value, color }: { label: string; value: number; color?: string }) {
+function Kpi({ label, value, color, note }: { label: string; value: number; color?: string; note?: string }) {
   return (
     <div className="kpi">
       <span className="label">{label}</span>
       <span className="value" style={color ? { color } : undefined}>{value}</span>
+      {note && <span className="note">{note}</span>}
     </div>
   )
 }
@@ -236,20 +244,20 @@ function Plan({ today }: { today: string }) {
     <section className="card">
       <div className="stack" style={{ gap: 4 }}>
         <h2>ตารางติดตาม 7 รอบใน 60 วัน</h2>
-        <p className="desc">นับวันที่คุยครั้งแรกเป็นวันที่ 1 ตัวอย่างวันที่ด้านล่างคิดจากลูกค้าที่เริ่มคุยวันนี้ ({dayYear(today)})</p>
+        <p className="desc">นับวันที่คุยครั้งแรกเป็นวันที่ 1 ตัวอย่างวันที่ด้านล่างคิดจากลูกค้าที่เริ่มคุยวันนี้ ({dayYear(today)}) และตามตรงวันทุกรอบ</p>
       </div>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>รอบ</th><th>วันที่นับจากเริ่ม</th><th>วันตัวอย่าง</th><th>จุดประสงค์</th></tr></thead>
+          <thead><tr><th>รอบ</th><th>วันที่นับจากเริ่ม</th><th>ห่างจากรอบก่อน</th><th>วันตัวอย่าง</th><th>จุดประสงค์</th></tr></thead>
           <tbody>
             {ROUNDS.map(r => (
-              <tr key={r}><td className="num">{r}</td><td>วันที่ {OFFSETS[r - 1]}</td><td className="num">{dayYear(dueDay(today, r))}</td><td>{GOALS[r - 1]}</td></tr>
+              <tr key={r}><td className="num">{r}</td><td>วันที่ {OFFSETS[r - 1]}</td><td>{r === 1 ? '1 วันหลังคุยครั้งแรก' : `${GAPS[r - 1]} วัน`}</td><td className="num">{dayYear(dueDay(today, r))}</td><td>{GOALS[r - 1]}</td></tr>
             ))}
           </tbody>
         </table>
       </div>
       <div className="grid g-300">
-        <div className="callout"><b>กติกาหลัก</b> วันกำหนดไม่เลื่อนตามวันที่ติดตามจริง ถ้าตามช้า รอบถัดไปยังนับจากวันแรกเหมือนเดิม ลูกค้าตอบก่อนกำหนดก็บันทึกล่วงหน้าได้</div>
+        <div className="callout"><b>กติกาหลัก</b> รอบถัดไปนับจากวันที่บันทึกรอบก่อนหน้าจริง ถ้าตามช้า รอบถัดไปก็เลื่อนตาม (ห่างเท่าเดิม) ลูกค้าที่เข้าคิวช้าเริ่มรอบ 1 ในวันที่เข้าคิว ลูกค้าตอบก่อนกำหนดก็บันทึกล่วงหน้าได้</div>
         <div className="callout"><b>ข้อควรระวัง</b> ซื้อแล้ว หรือลูกค้าไม่ประสงค์รับข้อความ ให้บันทึกทันที ระบบจะหยุดงานรอบต่อไปเอง ไม่ส่งข้อความขายซ้ำโดยไม่มีข้อมูลใหม่</div>
       </div>
     </section>
