@@ -1,5 +1,5 @@
 import { TOPICS, type Topic } from '../parse/topics'
-import { stageOf } from './conversations'
+import { NO_TAGS, noStageLabel, OTHER_TAGS, stageOf } from './conversations'
 import type { Lead } from './leads'
 import { BUY_REASON_TAGS, LOST_REASON_TAGS } from '../grouping/rules'
 
@@ -48,7 +48,7 @@ export function closedOnDay(leads: Lead[], day: string): { closed: number; tagge
 }
 
 export function dropStages(leads: Lead[]): [string, number][] {
-  const stages = leads.filter(l => !l.closed).map(l => stageOf(l.tags))
-  return ['พร้อมสั่ง', 'ลังเล', 'ขอโปร', 'ขอราคา', 'ถามสุขภาพ', 'สนใจ', 'ไม่มีแท็กขั้น'].map(s =>
-    [s, stages.filter(stage => stage === (s === 'ไม่มีแท็กขั้น' ? 'อื่นๆ' : s)).length])
+  const stages = leads.filter(l => !l.closed).map(l => { const s = stageOf(l.tags); return s === 'อื่นๆ' ? noStageLabel(l.tags) : s })
+  return ['พร้อมสั่ง', 'ลังเล', 'ขอโปร', 'ขอราคา', 'ถามสุขภาพ', 'สนใจ', OTHER_TAGS, NO_TAGS].map(s =>
+    [s, stages.filter(stage => stage === s).length])
 }

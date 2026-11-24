@@ -1,5 +1,5 @@
 import type { PageId } from '../config/pages'
-import { groupOf, isCloseTag, isDateTagOf } from '../grouping/rules'
+import { groupOf, isAdTag, isCloseTag, isDateTagOf } from '../grouping/rules'
 import type { ConvRow } from '../parse/types'
 import { gradeOf, type Grade } from './leads'
 import { addDays, type DateRange } from './range'
@@ -17,6 +17,13 @@ export function stageOf(tags: string[]): Stage {
   if (tags.some(isCloseTag)) return 'ปิดแล้ว'
   return STAGE_PREFIX.find(([p]) => tags.some(t => t.startsWith(p)))?.[1] ?? 'อื่นๆ'
 }
+
+// chats with no 1.–6. tag, split by whether an admin tagged anything at all;
+// date and ad-id tags don't count, they only say when or from which ad the chat came
+export const OTHER_TAGS = 'มีแท็กอื่น แต่ไม่มีแท็ก 1.–6.'
+export const NO_TAGS = 'ไม่มีแท็กเลย'
+export const noStageLabel = (tags: string[]): string =>
+  tags.some(t => !/^\d{1,2}\/\d{1,2}$/.test(t.trim()) && !isAdTag(t)) ? OTHER_TAGS : NO_TAGS
 
 export function replyOf(tags: string[]): Reply {
   for (const r of ['ไม่เปิดอ่าน', 'อ่านไม่ตอบ', 'ทักซ้ำไม่ซื้อ'] as const) if (tags.includes(r)) return r
@@ -38,9 +45,13 @@ export function convStats(convs: ConvRow[]) {
     total: convs.length,
     matrix: STAGES.filter(s => s !== 'ปิดแล้ว').flatMap(stage => {
       const xs = convs.filter(c => stageOf(c.tags) === stage)
-      if (!xs.length) return []
-      const r = (k: Reply) => count(xs, c => replyOf(c.tags) === k)
-      return [{ stage, talking: r('ยังคุยอยู่'), read: r('อ่านไม่ตอบ'), unread: r('ไม่เปิดอ่าน'), repeat: r('ทักซ้ำไม่ซื้อ') }]
+      const parts: [string, ConvRow[]][] = stage === 'อื่นๆ'
+        ? [OTHER_TAGS, NO_TAGS].map((l): [string, ConvRow[]] => [l, xs.filter(c => noStageLabel(c.tags) === l)])
+        : [[stage, xs]]
+      return parts.filter(([, ys]) => ys.length).map(([label, ys]) => {
+        const r = (k: Reply) => count(ys, c => replyOf(c.tags) === k)
+        return { stage, label, talking: r('ยังคุยอยู่'), read: r('อ่านไม่ตอบ'), unread: r('ไม่เปิดอ่าน'), repeat: r('ทักซ้ำไม่ซื้อ') }
+      })
     }),
     closedNow: closed.length,
     closedNew: count(closed, isNew),

@@ -25,7 +25,7 @@ describe('reasons', () => {
   })
   it('uses stage precedence, ignores closed chats and keeps fixed zero stages', () => {
     expect(dropStages([lead([], false, ['2.ขอราคา', '5.พร้อมสั่ง']), lead([], false, ['2.ขอราคา']), lead(), lead([], true)]))
-      .toEqual([['พร้อมสั่ง', 1], ['ลังเล', 0], ['ขอโปร', 0], ['ขอราคา', 1], ['ถามสุขภาพ', 0], ['สนใจ', 0], ['ไม่มีแท็กขั้น', 1]])
+      .toEqual([['พร้อมสั่ง', 1], ['ลังเล', 0], ['ขอโปร', 0], ['ขอราคา', 1], ['ถามสุขภาพ', 0], ['สนใจ', 0], ['มีแท็กอื่น แต่ไม่มีแท็ก 1.–6.', 0], ['ไม่มีแท็กเลย', 1]])
   })
   it('has no invalid rates for an empty cohort', () => {
     expect(topicStats([])).toEqual({ avg: null, buy: [], notBuy: [], none: 0 })
@@ -62,5 +62,12 @@ describe('reasons', () => {
     expect(toLeads([row, { ...row, day: '2026-11-08', tags: ['6/11', 'ปิดAds'] }, { ...row, day: '2026-11-09', tags: ['ปิด'] }])[0].closeDay)
       .toBe('2026-11-08')
     expect(toLeads([row])[0].closeDay).toBeNull()
+  })
+})
+
+describe('dropStages no-stage split', () => {
+  it('splits chats without 1.–6. by whether they have any other tag; date and ad tags do not count', () => {
+    const rows = dropStages([lead([], false, ['9.อื่นๆ .(ทักมั่ว)']), lead([], false, ['12/11', '120247446239640']), lead([], false, ['ไม่เปิดอ่าน'])])
+    expect(rows.slice(-2)).toEqual([['มีแท็กอื่น แต่ไม่มีแท็ก 1.–6.', 2], ['ไม่มีแท็กเลย', 1]])
   })
 })

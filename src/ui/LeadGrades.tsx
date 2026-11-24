@@ -20,7 +20,7 @@ export function LeadGrades({ leads, range, page }: { leads: Lead[]; range: DateR
   return (
     <section className="card" style={{ gap: 14 }}>
       <div className="stack" style={{ gap: 4 }}>
-        <h2>เกรดลีด</h2>
+        <h2>Lead grade</h2>
         <p className="desc">แชทใหม่ {fmt(sel.length)} แชทที่เริ่มในช่วงนี้ จัดเกรดจากพฤติกรรมการคุย แล้วดูว่าแต่ละเกรดปิดได้กี่ %</p>
       </div>
       {sel.length === 0 ? (

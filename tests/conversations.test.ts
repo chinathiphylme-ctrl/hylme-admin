@@ -59,7 +59,7 @@ describe('convStats', () => {
     expect([s.closedNow, s.closedNew, s.closedStale]).toEqual([2, 1, 1])
     expect(s.hours[12]).toBe(3)
     expect(s.hours[21]).toBe(1)
-    expect(s.matrix.find(m => m.stage === 'ขอราคา')).toEqual({ stage: 'ขอราคา', talking: 0, read: 1, unread: 0, repeat: 0 })
+    expect(s.matrix.find(m => m.stage === 'ขอราคา')).toEqual({ stage: 'ขอราคา', label: 'ขอราคา', talking: 0, read: 1, unread: 0, repeat: 0 })
     expect(s.matrix.find(m => m.stage === 'ปิดแล้ว')).toBeUndefined()
   })
 })
