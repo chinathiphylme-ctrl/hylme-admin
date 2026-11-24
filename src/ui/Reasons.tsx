@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import type { Lead } from '../metrics/leads'
 import {
-  closedOnDay, dropStages, latestDay, reasonTagStats, topicCoverage, topicStats, whoOf, type ReasonSide, type TopicRow, type Who,
+  closedOnDay, dropStages, latestDay, noStageBreakdown, reasonTagStats, topicCoverage, topicStats, whoOf, type NoStage, type ReasonSide, type TopicRow, type Who,
 } from '../metrics/reasons'
 import { BarList } from './charts'
+import { NO_TAGS, OTHER_TAGS } from '../metrics/conversations'
 import { fmt, thaiDay } from './viewModel'
 
 const WHO: [Who, string][] = [['all', 'ทั้งหมด'], ['new', 'แชทใหม่'], ['old', 'ลูกค้าเก่า']]
@@ -26,6 +27,50 @@ function Tags({ title, side, outcome }: { title: string; side: ReasonSide; outco
     {side.rows.map(([tag, n]) => <div key={tag} className="reason-row" style={{ color: n ? undefined : '#7B8981' }}>
       <span>{tag}</span><b className="num">{fmt(n)}</b>
     </div>)}
+  </div>
+}
+
+const SHOW = 12
+
+function CountTable({ title, part, label, rows }: { title?: string; part: NoStage; label: string; rows: [string, number][] }) {
+  const pct = (k: number) => (part.total ? `${Math.round((k / part.total) * 100)}%` : '—')
+  return <div className="table-wrap">
+    <table>
+      {title && <caption style={{ textAlign: 'left', fontWeight: 600, padding: '0 0 6px' }}>{title}</caption>}
+      <thead><tr><th>{label}</th><th style={{ textAlign: 'right' }}>แชท</th><th style={{ textAlign: 'right' }}>%</th></tr></thead>
+      <tbody>{rows.map(([k, v]) => <tr key={k}>
+        <td>{k}</td><td className="num" style={{ textAlign: 'right' }}>{fmt(v)}</td><td className="num" style={{ textAlign: 'right' }}>{pct(v)}</td>
+      </tr>)}</tbody>
+    </table>
+  </div>
+}
+
+function NoStageTables({ leads }: { leads: Lead[] }) {
+  const { other, none } = noStageBreakdown(leads)
+  if (!other.total && !none.total) return null
+  const head = other.rows.slice(0, SHOW), rest = other.rows.slice(SHOW)
+  return <div className="stack" style={{ gap: 10 }}>
+    <h3 style={{ fontSize: 15 }}>แชทที่ไม่มีแท็ก 1.–6.</h3>
+    <div className="grid g-380">
+      <div className="card" style={{ gap: 8 }}>
+        <h3 style={{ fontSize: 14 }}>{OTHER_TAGS} · {fmt(other.total)} แชท</h3>
+        {head.length ? <CountTable title="ติดแท็กอะไรไว้แทน" part={other} label="แท็ก" rows={head} /> : <p className="desc">ไม่มี</p>}
+        {rest.length > 0 && <details>
+          <summary style={{ cursor: 'pointer', fontSize: 13 }}>อีก {fmt(rest.length)} แท็ก</summary>
+          <CountTable part={other} label="แท็ก" rows={rest} />
+        </details>}
+        <p className="small">แชทหนึ่งมีได้หลายแท็ก จำนวนจึงรวมเกินได้ · แท็ก 8./9./10. เป็นที่มาลูกค้า ไม่ใช่ขั้น · ไม่นับแท็กวันที่และเลขแอด</p>
+      </div>
+      <div className="card" style={{ gap: 8 }}>
+        <h3 style={{ fontSize: 14 }}>{NO_TAGS} · {fmt(none.total)} แชท</h3>
+        {none.total ? <>
+          <CountTable title="คุยกันกี่ข้อความ" part={none} label="ข้อความ" rows={none.rows.slice(0, 3)} />
+          <CountTable title="เริ่มแชทยังไง" part={none} label="ข้อความแรก" rows={none.rows.slice(3, 5)} />
+          <CountTable title="มาจากโฆษณา" part={none} label="ที่มา" rows={none.rows.slice(5)} />
+        </> : <p className="desc">ไม่มี</p>}
+        <p className="small">ไม่มีแท็กอะไรเลย นอกจากแท็กวันที่หรือเลขแอด</p>
+      </div>
+    </div>
   </div>
 }
 
@@ -69,7 +114,8 @@ export function Reasons({ chats, from, to, day }: { chats: Lead[]; from: string 
       <p className="small">นับแต่ละแชทครั้งเดียวต่อแท็ก แชทหนึ่งอาจมีหลายเหตุผล และแอดมินอาจยังติดแท็กไม่ครบ · ลูกค้าเก่าคือแชทที่มีแท็ก 8.ลูกค้าเก่า หรือไม่มีแท็กวันที่ของวันแรกที่พบ แท็กปิดของลูกค้าเก่าบางแชทอาจค้างจากการซื้อครั้งก่อน · ปิดการขายในไฟล์วันนั้น นับแชทที่แท็กปิดเพิ่งปรากฏในไฟล์ข้อความของวันนั้นเป็นครั้งแรก</p>
       <h3 style={{ fontSize: 15 }}>คนที่ไม่ซื้อ เงียบไปที่ขั้นไหน</h3>
       <BarList items={dropStages(leads)} color="#B4401A" empty="ยังไม่มีแชทที่ไม่ซื้อ" />
-      <p className="small">ขั้นสุดท้ายตามแท็กที่เคยพบในไฟล์ แชทที่ยังไม่ปิดอาจยังคุยอยู่ · แท็ก 8./9./10. เป็นที่มาลูกค้า ไม่ใช่ขั้น จึงอยู่ใน "มีแท็กอื่น" · "ไม่มีแท็กเลย" ไม่นับแท็กวันที่และเลขแอด</p>
+      <p className="small">ขั้นสุดท้ายตามแท็กที่เคยพบในไฟล์ แชทที่ยังไม่ปิดอาจยังคุยอยู่ · แชทที่ไม่มีแท็ก 1.–6. แยกไว้ในตารางด้านล่าง</p>
+      <NoStageTables leads={leads} />
     </>}
   </section>
 }

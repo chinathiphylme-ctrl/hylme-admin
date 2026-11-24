@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { toLeads, type Lead } from '../src/metrics/leads'
-import { closedOnDay, dropStages, latestDay, reasonTagStats, topicCoverage, topicStats, whoOf } from '../src/metrics/reasons'
+import { closedOnDay, dropStages, latestDay, noStageBreakdown, reasonTagStats, topicCoverage, topicStats, whoOf } from '../src/metrics/reasons'
 
 const lead = (topics: string[] = [], closed = false, tags: string[] = []): Lead => ({
   conversationId: 'c', pageId: '100379779472465', startDay: '2026-11-06', lastDay: '2026-11-06',
@@ -25,7 +25,7 @@ describe('reasons', () => {
   })
   it('uses stage precedence, ignores closed chats and keeps fixed zero stages', () => {
     expect(dropStages([lead([], false, ['2.ขอราคา', '5.พร้อมสั่ง']), lead([], false, ['2.ขอราคา']), lead(), lead([], true)]))
-      .toEqual([['พร้อมสั่ง', 1], ['ลังเล', 0], ['ขอโปร', 0], ['ขอราคา', 1], ['ถามสุขภาพ', 0], ['สนใจ', 0], ['มีแท็กอื่น แต่ไม่มีแท็ก 1.–6.', 0], ['ไม่มีแท็กเลย', 1]])
+      .toEqual([['พร้อมสั่ง', 1], ['ลังเล', 0], ['ขอโปร', 0], ['ขอราคา', 1], ['ถามสุขภาพ', 0], ['สนใจ', 0]])
   })
   it('has no invalid rates for an empty cohort', () => {
     expect(topicStats([])).toEqual({ avg: null, buy: [], notBuy: [], none: 0 })
@@ -65,9 +65,16 @@ describe('reasons', () => {
   })
 })
 
-describe('dropStages no-stage split', () => {
-  it('splits chats without 1.–6. by whether they have any other tag; date and ad tags do not count', () => {
-    const rows = dropStages([lead([], false, ['9.อื่นๆ .(ทักมั่ว)']), lead([], false, ['12/11', '120247446239640']), lead([], false, ['ไม่เปิดอ่าน'])])
-    expect(rows.slice(-2)).toEqual([['มีแท็กอื่น แต่ไม่มีแท็ก 1.–6.', 2], ['ไม่มีแท็กเลย', 1]])
+describe('noStageBreakdown', () => {
+  it('splits open no-stage chats into other-tag counts and untagged chats; date and ad tags do not count', () => {
+    const ad = { ...lead([], false, ['12/11', '120247446239640']), ads: ['120247446239640'], typedFirst: false }
+    const r = noStageBreakdown([
+      lead([], false, ['9.อื่นๆ .(ทักมั่ว)', 'ไม่เปิดอ่าน', '12/11']), lead([], false, ['ไม่เปิดอ่าน']), ad,
+      { ...lead(), msgs: 5 }, lead([], false, ['2.ขอราคา']), lead([], true, ['ไม่เปิดอ่าน']),
+    ])
+    expect(r.other).toEqual({ total: 2, rows: [['ไม่เปิดอ่าน', 2], ['9.อื่นๆ .(ทักมั่ว)', 1]] })
+    expect(r.none.total).toBe(2)
+    expect(r.none.rows).toEqual([['ส่งข้อความเดียว', 1], ['2–3 ข้อความ', 0], ['4 ข้อความขึ้นไป', 1],
+      ['เริ่มจากกดปุ่ม', 1], ['พิมพ์ข้อความแรกเอง', 1], ['มีเลขแอด (มาจากโฆษณา)', 1]])
   })
 })
