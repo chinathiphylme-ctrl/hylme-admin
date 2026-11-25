@@ -22,8 +22,8 @@ export function stageOf(tags: string[]): Stage {
 // date and ad-id tags don't count, they only say when or from which ad the chat came
 export const OTHER_TAGS = 'มีแท็กอื่น แต่ไม่มีแท็ก 1.–6.'
 export const NO_TAGS = 'ไม่มีแท็กเลย'
-export const noStageLabel = (tags: string[]): string =>
-  tags.some(t => !/^\d{1,2}\/\d{1,2}$/.test(t.trim()) && !isAdTag(t)) ? OTHER_TAGS : NO_TAGS
+export const isDateOrAdTag = (t: string) => /^\d{1,2}\/\d{1,2}$/.test(t.trim()) || isAdTag(t)
+export const noStageLabel = (tags: string[]): string => tags.some(t => !isDateOrAdTag(t)) ? OTHER_TAGS : NO_TAGS
 
 export function replyOf(tags: string[]): Reply {
   for (const r of ['ไม่เปิดอ่าน', 'อ่านไม่ตอบ', 'ทักซ้ำไม่ซื้อ'] as const) if (tags.includes(r)) return r
@@ -43,15 +43,12 @@ export function convStats(convs: ConvRow[]) {
   const closed = convs.filter(c => c.tags.some(isCloseTag))
   return {
     total: convs.length,
-    matrix: STAGES.filter(s => s !== 'ปิดแล้ว').flatMap(stage => {
+    // chats without a 1.–6. tag are left out here and shown on their own by noStageChats
+    matrix: STAGES.filter(s => s !== 'ปิดแล้ว' && s !== 'อื่นๆ').flatMap(stage => {
       const xs = convs.filter(c => stageOf(c.tags) === stage)
-      const parts: [string, ConvRow[]][] = stage === 'อื่นๆ'
-        ? [OTHER_TAGS, NO_TAGS].map((l): [string, ConvRow[]] => [l, xs.filter(c => noStageLabel(c.tags) === l)])
-        : [[stage, xs]]
-      return parts.filter(([, ys]) => ys.length).map(([label, ys]) => {
-        const r = (k: Reply) => count(ys, c => replyOf(c.tags) === k)
-        return { stage, label, talking: r('ยังคุยอยู่'), read: r('อ่านไม่ตอบ'), unread: r('ไม่เปิดอ่าน'), repeat: r('ทักซ้ำไม่ซื้อ') }
-      })
+      if (!xs.length) return []
+      const r = (k: Reply) => count(xs, c => replyOf(c.tags) === k)
+      return [{ stage, talking: r('ยังคุยอยู่'), read: r('อ่านไม่ตอบ'), unread: r('ไม่เปิดอ่าน'), repeat: r('ทักซ้ำไม่ซื้อ') }]
     }),
     closedNow: closed.length,
     closedNew: count(closed, isNew),
@@ -63,6 +60,41 @@ export function convStats(convs: ConvRow[]) {
     ] as [string, number][],
     products: [...products].sort((a, b) => b[1] - a[1]),
     hours,
+  }
+}
+
+const isSilent = (c: ConvRow) => { const r = replyOf(c.tags); return r === 'อ่านไม่ตอบ' || r === 'ไม่เปิดอ่าน' }
+const byLatest = (a: ConvRow, b: ConvRow) => b.lastAt.localeCompare(a.lastAt)
+
+export type NoStageChats = {
+  other: { chats: ConvRow[]; silent: number; tags: { tag: string; chats: number; silent: number }[] }
+  none: { chats: ConvRow[]; rows: [string, number][] }
+}
+
+// open chats with no 1.–6. tag: which other tags they carry (and how many went quiet), and the untagged ones,
+// each with its chats newest first so admins can open them in Pancake and add a stage tag
+export function noStageChats(convs: ConvRow[]): NoStageChats {
+  const open = convs.filter(c => stageOf(c.tags) === 'อื่นๆ')
+  const other = open.filter(c => noStageLabel(c.tags) === OTHER_TAGS).sort(byLatest)
+  const none = open.filter(c => noStageLabel(c.tags) === NO_TAGS).sort(byLatest)
+  const tags = new Map<string, { chats: number; silent: number }>()
+  for (const c of other) for (const t of new Set(c.tags.filter(t => !isDateOrAdTag(t)))) {
+    const x = tags.get(t) ?? { chats: 0, silent: 0 }
+    x.chats++
+    if (isSilent(c)) x.silent++
+    tags.set(t, x)
+  }
+  const n = (f: (c: ConvRow) => boolean) => count(none, f)
+  return {
+    other: {
+      chats: other, silent: count(other, isSilent),
+      tags: [...tags].map(([tag, x]) => ({ tag, ...x })).sort((a, b) => b.chats - a.chats || a.tag.localeCompare(b.tag)),
+    },
+    none: { chats: none, rows: [
+      ['ส่งข้อความเดียว', n(c => c.msgCount <= 1)], ['2–3 ข้อความ', n(c => c.msgCount >= 2 && c.msgCount <= 3)], ['4 ข้อความขึ้นไป', n(c => c.msgCount >= 4)],
+      ['เริ่มจากกดปุ่ม', n(c => c.firstKind === 'button')], ['พิมพ์ข้อความแรกเอง', n(c => c.firstKind !== 'button')],
+      ['มีเลขแอด (มาจากโฆษณา)', n(c => c.tags.some(isAdTag))],
+    ] },
   }
 }
 

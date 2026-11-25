@@ -7,6 +7,7 @@ import { orderStats } from '../metrics/orders'
 import { addDays, daysIn, previousRange, type DateRange } from '../metrics/range'
 import type { ConvRow, OrderRow, TagRow } from '../parse/types'
 import { LeadGrades } from './LeadGrades'
+import { NoStageCard } from './NoStageCard'
 import { Bar, BarList, HourBars, peakHours, Ring, StackedBar, TrendBars } from './charts'
 import { ACCENT, buildInsights, CRIT, deltaText, fixList, fmt, rangeLabel, rateColor, thaiDay } from './viewModel'
 
@@ -303,7 +304,7 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '10px 20px', alignItems: 'flex-start' }}>
               <div className="stack" style={{ gap: 4 }}>
                 <h3>แชทค้างแต่ละขั้น ลูกค้าตอบหรือยัง</h3>
-                <p className="desc">ไม่รวมแชทที่ปิดแล้ว {fmt(cs.closedNow)} แชท · "ไม่มีแท็กเลย" ไม่นับแท็กวันที่และเลขแอด</p>
+                <p className="desc">ไม่รวมแชทที่ปิดแล้ว {fmt(cs.closedNow)} แชท · แชทที่ไม่มีแท็ก 1.–6. แยกไว้ในการ์ดถัดไป</p>
               </div>
               <div className="legend">{SEG_LABELS.map((l, i) => <span key={l}><span className="dot" style={{ background: SEG_COLORS[i] }} />{l}</span>)}</div>
             </div>
@@ -313,8 +314,8 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
                 const silent = m.read + m.unread
                 const vals = [m.talking, m.read, m.unread, m.repeat]
                 return (
-                  <div className="mrow" key={m.label}>
-                    <span style={{ fontWeight: 500 }}>{m.label}</span>
+                  <div className="mrow" key={m.stage}>
+                    <span style={{ fontWeight: 500 }}>{m.stage}</span>
                     <span className="stack" style={{ gap: 4, minWidth: 0 }}>
                       <span style={{ width: `${Math.max(4, (total / mMax) * 100)}%` }}>
                         <StackedBar height={18} gap={2} parts={vals.map((v, i) => ({ value: v, color: SEG_COLORS[i], title: `${SEG_LABELS[i]} ${v}` }))} />
@@ -327,6 +328,8 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
               })}
             </div>
           </div>
+
+          <NoStageCard convs={cv} />
 
           <div className="grid g-380">
             <div className="card" style={{ gap: 14 }}>

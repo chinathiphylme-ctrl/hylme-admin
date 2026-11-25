@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { convStats, followList, replyOf, segmentRates, stageOf } from '../src/metrics/conversations'
+import { convStats, followList, noStageChats, replyOf, segmentRates, stageOf } from '../src/metrics/conversations'
 import type { ConvRow } from '../src/parse/types'
 
 let n = 0
@@ -59,7 +59,7 @@ describe('convStats', () => {
     expect([s.closedNow, s.closedNew, s.closedStale]).toEqual([2, 1, 1])
     expect(s.hours[12]).toBe(3)
     expect(s.hours[21]).toBe(1)
-    expect(s.matrix.find(m => m.stage === 'ขอราคา')).toEqual({ stage: 'ขอราคา', label: 'ขอราคา', talking: 0, read: 1, unread: 0, repeat: 0 })
+    expect(s.matrix.find(m => m.stage === 'ขอราคา')).toEqual({ stage: 'ขอราคา', talking: 0, read: 1, unread: 0, repeat: 0 })
     expect(s.matrix.find(m => m.stage === 'ปิดแล้ว')).toBeUndefined()
   })
 })
@@ -131,3 +131,22 @@ describe('followList grades', () => {
   })
 })
 
+
+describe('noStageChats', () => {
+  it('splits open chats without a 1.-6. tag; counts silent per tag; date, ad and closed chats handled', () => {
+    const r = noStageChats([
+      conv(['9.อื่นๆ .(ทักมั่ว)', 'ไม่เปิดอ่าน', '12/11'], { conversationId: 'a', lastAt: '2026-11-12T10:00:00' }),
+      conv(['10.เราทักเม้น'], { conversationId: 'b', lastAt: '2026-11-12T11:00:00' }),
+      conv(['12/11', '120247446239640'], { conversationId: 'c', msgCount: 1, firstKind: 'button' }),
+      conv(['2.ขอราคา'], { conversationId: 'd' }),
+      conv(['ปิด', 'ไม่เปิดอ่าน'], { conversationId: 'e' }),
+    ])
+    expect(r.other.chats.map(c => c.conversationId)).toEqual(['b', 'a'])
+    expect(r.other.silent).toBe(1)
+    expect(r.other.tags).toEqual([
+      { tag: '10.เราทักเม้น', chats: 1, silent: 0 }, { tag: '9.อื่นๆ .(ทักมั่ว)', chats: 1, silent: 1 }, { tag: 'ไม่เปิดอ่าน', chats: 1, silent: 1 }])
+    expect(r.none.chats.map(c => c.conversationId)).toEqual(['c'])
+    expect(r.none.rows).toEqual([['ส่งข้อความเดียว', 1], ['2–3 ข้อความ', 0], ['4 ข้อความขึ้นไป', 0],
+      ['เริ่มจากกดปุ่ม', 1], ['พิมพ์ข้อความแรกเอง', 0], ['มีเลขแอด (มาจากโฆษณา)', 1]])
+  })
+})

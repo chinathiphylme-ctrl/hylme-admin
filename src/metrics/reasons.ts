@@ -1,7 +1,7 @@
 import { TOPICS, type Topic } from '../parse/topics'
-import { NO_TAGS, noStageLabel, OTHER_TAGS, stageOf } from './conversations'
+import { isDateOrAdTag, NO_TAGS, noStageLabel, OTHER_TAGS, stageOf } from './conversations'
 import type { Lead } from './leads'
-import { BUY_REASON_TAGS, isAdTag, LOST_REASON_TAGS } from '../grouping/rules'
+import { BUY_REASON_TAGS, LOST_REASON_TAGS } from '../grouping/rules'
 
 export { BUY_REASON_TAGS, LOST_REASON_TAGS }
 export const MIN_TOPIC_CHATS = 10
@@ -53,7 +53,6 @@ export function dropStages(leads: Lead[]): [string, number][] {
 }
 
 export type NoStage = { total: number; rows: [string, number][] }
-const isDateOrAd = (t: string) => /^\d{1,2}\/\d{1,2}$/.test(t.trim()) || isAdTag(t)
 
 // open chats with no 1.–6. tag, in two tables: which other tags they carry, and what the untagged ones look like
 export function noStageBreakdown(leads: Lead[]): { other: NoStage; none: NoStage } {
@@ -61,7 +60,7 @@ export function noStageBreakdown(leads: Lead[]): { other: NoStage; none: NoStage
   const other = open.filter(l => noStageLabel(l.tags) === OTHER_TAGS)
   const none = open.filter(l => noStageLabel(l.tags) === NO_TAGS)
   const tags = new Map<string, number>()
-  for (const l of other) for (const t of new Set(l.tags.filter(t => !isDateOrAd(t)))) tags.set(t, (tags.get(t) ?? 0) + 1)
+  for (const l of other) for (const t of new Set(l.tags.filter(t => !isDateOrAdTag(t)))) tags.set(t, (tags.get(t) ?? 0) + 1)
   const n = (f: (l: Lead) => boolean) => none.filter(f).length
   return {
     other: { total: other.length, rows: [...tags].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])) },
