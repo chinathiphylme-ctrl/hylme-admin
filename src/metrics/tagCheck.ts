@@ -80,9 +80,16 @@ function checkDay(day: string, convs: ConvRow[]): DayCheck {
   }
 }
 
-// one check per day in the uploaded chats, newest day first
+// one check per day in the uploaded chats, newest day first; when two files of the same day hold a chat
+// (an export and a later re-export), only the copy with the latest message counts, as the database keeps one row
 export function checkByDay(convs: ConvRow[]): DayCheck[] {
+  const latest = new Map<string, ConvRow>()
+  for (const c of convs) {
+    const k = `${c.day}|${c.pageId}|${c.conversationId}`
+    const prev = latest.get(k)
+    if (!prev || c.lastAt > prev.lastAt) latest.set(k, c)
+  }
   const days = new Map<string, ConvRow[]>()
-  for (const c of convs) days.set(c.day, [...(days.get(c.day) ?? []), c])
+  for (const c of latest.values()) days.set(c.day, [...(days.get(c.day) ?? []), c])
   return [...days.keys()].sort().reverse().map(d => checkDay(d, days.get(d)!))
 }

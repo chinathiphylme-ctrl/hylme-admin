@@ -65,4 +65,13 @@ describe('checkByDay', () => {
     expect(d.incomplete[0].missing).toEqual(['admin', 'stage', 'lostReason'])
     expect(r[1].byAdmin).toEqual([{ admin: 'นุ่น', incomplete: 0, of: 1 }])
   })
+
+  it('counts a chat once when two files of the same day hold it, using the later one', () => {
+    const r = checkByDay([
+      conv(['2.ขอราคา'], { conversationId: 'z', lastAt: '2026-11-26T10:00:00+07:00' }),
+      conv(['พี่ก้อย', '2.ขอราคา'], { conversationId: 'z', lastAt: '2026-11-26T18:00:00+07:00' }),
+      conv(['พี่ก้อย'], { conversationId: 'z', lastAt: '2026-11-26T12:00:00+07:00' }),
+    ])
+    expect([r[0].total, r[0].complete, r[0].incomplete.length]).toEqual([1, 1, 0])
+  })
 })
