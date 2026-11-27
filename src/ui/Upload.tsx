@@ -7,9 +7,10 @@ import { detectKind } from '../parse/detect'
 import { parseMessages } from '../parse/messages'
 import { parseOrders } from '../parse/orders'
 import { parseTagStats } from '../parse/tagStats'
-import type { Candidate, MessagesResult, OrdersResult, TagStatsResult } from '../parse/types'
+import type { Candidate, ConvRow, MessagesResult, OrdersResult, TagStatsResult } from '../parse/types'
 import { Candidates } from './Candidates'
 import { loadCode, storeCode } from './code'
+import { TagCheckCard } from './TagCheckCard'
 import { uploadTime } from './Sidebar'
 import { existingKeys, KIND_LABEL, planUpload } from './uploadPlan'
 import { ACCENT, rangeLabel, thaiMonth } from './viewModel'
@@ -100,6 +101,7 @@ export function Upload({ uploads, overrides, onSaved, goTags }: {
   const [results, setResults] = useState<SaveState[]>([])
   const [error, setError] = useState('')
   const [candidates, setCandidates] = useState<Candidate[] | null>(null)
+  const [checked, setChecked] = useState<ConvRow[]>([])
   const input = useRef<HTMLInputElement>(null)
 
   const plan = useMemo(() => planUpload(parsed, existingKeys(uploads), overrides), [parsed, uploads, overrides])
@@ -118,6 +120,7 @@ export function Upload({ uploads, overrides, onSaved, goTags }: {
   const save = async () => {
     setError('')
     setResults([])
+    setChecked([])
     setBusy(true)
     try {
       if (!(await checkCode(code))) {
@@ -141,6 +144,8 @@ export function Upload({ uploads, overrides, onSaved, goTags }: {
           out.push({ fileName: p.fileName, ok: false, text: `บันทึกไม่สำเร็จ: ${(e as Error).message}` })
         }
       }
+      // tag check covers only message files that were saved
+      setChecked(ready.flatMap(p => 'convs' in p && out.some(o => o.ok && o.fileName === p.fileName) ? p.convs : []))
       // the save above is already done; a failed queue sync only adds a warning line
       if (ready.some(p => 'convs' in p && out.some(o => o.ok && o.fileName === p.fileName))) {
         try {
@@ -216,6 +221,7 @@ export function Upload({ uploads, overrides, onSaved, goTags }: {
         </div>
         {error && <p className="msg-err">{error}</p>}
         {results.map(r => <p key={r.fileName} className={r.ok ? 'msg-ok' : 'msg-err'}>{r.fileName}: {r.text}</p>)}
+        <TagCheckCard convs={checked} />
       </section>
 
       <section className="card" style={{ gap: 14 }}>
