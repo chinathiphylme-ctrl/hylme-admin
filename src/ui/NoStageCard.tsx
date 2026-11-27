@@ -1,5 +1,5 @@
 import { pageName } from '../config/pages'
-import { isDateOrAdTag, NO_TAGS, noStageChats, OTHER_TAGS, replyOf } from '../metrics/conversations'
+import { isDateOrAdTag, NO_TAGS, noStageChats, replyOf } from '../metrics/conversations'
 import type { ConvRow } from '../parse/types'
 import { fmt, thaiDay } from './viewModel'
 
@@ -58,12 +58,12 @@ export function NoStageCard({ convs }: { convs: ConvRow[] }) {
   const head = other.tags.slice(0, SHOW_TAGS), rest = other.tags.slice(SHOW_TAGS)
   return <div className="card" style={{ gap: 12 }}>
     <div className="stack" style={{ gap: 4 }}>
-      <h3>แชทที่ยังไม่มีแท็ก 1.–6.</h3>
+      <h3>แชทที่ยังไม่มีแท็ก 1.–10.</h3>
       <p className="desc">แชทที่ยังไม่ปิดและยังไม่ได้ติดแท็กขั้น จึงไม่รู้ว่าลูกค้าติดตรงไหน เปิดแชทใน Pancake แล้วติดแท็กขั้นให้ได้เลย</p>
     </div>
     <div className="grid g-380">
       <div className="stack" style={{ gap: 8 }}>
-        <h3 style={{ fontSize: 14 }}>{OTHER_TAGS} · {fmt(other.chats.length)} แชท</h3>
+        <h3 style={{ fontSize: 14 }}>มีแท็กอื่น แต่ไม่มีแท็ก 1.–10. · {fmt(other.chats.length)} แชท</h3>
         <p className="small">เงียบ {fmt(other.silent)} จาก {fmt(other.chats.length)} แชท ({pct(other.silent, other.chats.length)}) · เงียบ = มีแท็กอ่านไม่ตอบ หรือไม่เปิดอ่าน</p>
         {head.length > 0 && <TagTable rows={head} total={other.chats.length} />}
         {rest.length > 0 && <details>
@@ -71,7 +71,7 @@ export function NoStageCard({ convs }: { convs: ConvRow[] }) {
           <TagTable rows={rest} total={other.chats.length} />
         </details>}
         {other.chats.length > 0 && <ChatList chats={other.chats} withTags />}
-        <p className="small">แชทหนึ่งมีได้หลายแท็ก จำนวนจึงรวมเกินได้ · แท็ก 8./9./10. เป็นที่มาลูกค้า ไม่ใช่ขั้น · ไม่นับแท็กวันที่และเลขแอด</p>
+        <p className="small">แชทหนึ่งมีได้หลายแท็ก จำนวนจึงรวมเกินได้ · ไม่นับแท็กวันที่และเลขแอด</p>
       </div>
       <div className="stack" style={{ gap: 8 }}>
         <h3 style={{ fontSize: 14 }}>{NO_TAGS} · {fmt(none.chats.length)} แชท</h3>

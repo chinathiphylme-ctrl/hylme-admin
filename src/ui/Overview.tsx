@@ -50,9 +50,9 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
   const cs = convStats(cv)
   const row = (st: string) => cs.matrix.find(m => m.stage === st) ?? { read: 0, unread: 0 }
   const insights = buildInsights({
-    readySilent: row('พร้อมสั่ง').read + row('พร้อมสั่ง').unread,
-    priceRead: row('ขอราคา').read,
-    priceUnread: row('ขอราคา').unread,
+    readySilent: row('5.พร้อมสั่ง').read + row('5.พร้อมสั่ง').unread,
+    priceRead: row('2.ขอราคา').read,
+    priceUnread: row('2.ขอราคา').unread,
     convNew: cs.mix[0][1],
     closedNew: cs.closedNew,
     convLabel: pagesLabel(cv),
@@ -304,7 +304,7 @@ export function Overview({ rows, convs, orders, leads, seen, range, page, setPag
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '10px 20px', alignItems: 'flex-start' }}>
               <div className="stack" style={{ gap: 4 }}>
                 <h3>แชทค้างแต่ละขั้น ลูกค้าตอบหรือยัง</h3>
-                <p className="desc">ไม่รวมแชทที่ปิดแล้ว {fmt(cs.closedNow)} แชท · แชทที่ไม่มีแท็ก 1.–6. แยกไว้ในการ์ดถัดไป</p>
+                <p className="desc">ไม่รวมแชทที่ปิดแล้ว {fmt(cs.closedNow)} แชท · แชทหนึ่งอยู่แถวเดียว: มีแท็ก 1.–6. ใช้ขั้นนั้น ถ้าไม่มีใช้ 7., 10., 9., 8. ตามลำดับ · แชทที่ไม่มีแท็ก 1.–10. แยกไว้ในการ์ดถัดไป</p>
               </div>
               <div className="legend">{SEG_LABELS.map((l, i) => <span key={l}><span className="dot" style={{ background: SEG_COLORS[i] }} />{l}</span>)}</div>
             </div>

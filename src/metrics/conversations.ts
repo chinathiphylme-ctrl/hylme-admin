@@ -25,6 +25,19 @@ export const NO_TAGS = 'ไม่มีแท็กเลย'
 export const isDateOrAdTag = (t: string) => /^\d{1,2}\/\d{1,2}$/.test(t.trim()) || isAdTag(t)
 export const noStageLabel = (tags: string[]): string => tags.some(t => !isDateOrAdTag(t)) ? OTHER_TAGS : NO_TAGS
 
+export const NUMBER_ROWS = ['1.สนใจ', '2.ขอราคา', '3.ขอโปร', '4.ถามสุขภาพ', '5.พร้อมสั่ง', '6.ลังเล',
+  '7.เปรียบเทียบราคา', '8.ลูกค้าเก่า', '9.ทักมั่ว', '10.เราทักเม้น'] as const
+const STAGE_NUMBER: Partial<Record<Stage, number>> = { 'สนใจ': 1, 'ขอราคา': 2, 'ขอโปร': 3, 'ถามสุขภาพ': 4, 'พร้อมสั่ง': 5, 'ลังเล': 6 }
+
+// the one numbered row (1–10) an open chat sits in: its stage tag 1.–6. in stageOf's order, else 7., 10., 9., 8.
+// (8.ลูกค้าเก่า last, so a returning customer with a stage shows under that stage); 0 = no numbered tag, null = closed
+export function numberOf(tags: string[]): number | null {
+  const s = stageOf(tags)
+  if (s === 'ปิดแล้ว') return null
+  if (s !== 'อื่นๆ') return STAGE_NUMBER[s]!
+  return [7, 10, 9, 8].find(n => tags.some(t => t.trim().startsWith(`${n}.`))) ?? 0
+}
+
 export function replyOf(tags: string[]): Reply {
   for (const r of ['ไม่เปิดอ่าน', 'อ่านไม่ตอบ', 'ทักซ้ำไม่ซื้อ'] as const) if (tags.includes(r)) return r
   return 'ยังคุยอยู่'
@@ -43,9 +56,9 @@ export function convStats(convs: ConvRow[]) {
   const closed = convs.filter(c => c.tags.some(isCloseTag))
   return {
     total: convs.length,
-    // chats without a 1.–6. tag are left out here and shown on their own by noStageChats
-    matrix: STAGES.filter(s => s !== 'ปิดแล้ว' && s !== 'อื่นๆ').flatMap(stage => {
-      const xs = convs.filter(c => stageOf(c.tags) === stage)
+    // one row per numbered tag 1.–10.; chats with none of them are shown on their own by noStageChats
+    matrix: NUMBER_ROWS.flatMap((stage, i) => {
+      const xs = convs.filter(c => numberOf(c.tags) === i + 1)
       if (!xs.length) return []
       const r = (k: Reply) => count(xs, c => replyOf(c.tags) === k)
       return [{ stage, talking: r('ยังคุยอยู่'), read: r('อ่านไม่ตอบ'), unread: r('ไม่เปิดอ่าน'), repeat: r('ทักซ้ำไม่ซื้อ') }]
@@ -74,7 +87,7 @@ export type NoStageChats = {
 // open chats with no 1.–6. tag: which other tags they carry (and how many went quiet), and the untagged ones,
 // each with its chats newest first so admins can open them in Pancake and add a stage tag
 export function noStageChats(convs: ConvRow[]): NoStageChats {
-  const open = convs.filter(c => stageOf(c.tags) === 'อื่นๆ')
+  const open = convs.filter(c => numberOf(c.tags) === 0)
   const other = open.filter(c => noStageLabel(c.tags) === OTHER_TAGS).sort(byLatest)
   const none = open.filter(c => noStageLabel(c.tags) === NO_TAGS).sort(byLatest)
   const tags = new Map<string, { chats: number; silent: number }>()
