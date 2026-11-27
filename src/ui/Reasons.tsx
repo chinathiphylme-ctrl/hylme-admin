@@ -50,7 +50,7 @@ function NoStageTables({ leads }: { leads: Lead[] }) {
   if (!other.total && !none.total) return null
   const head = other.rows.slice(0, SHOW), rest = other.rows.slice(SHOW)
   return <div className="stack" style={{ gap: 10 }}>
-    <h3 style={{ fontSize: 15 }}>แชทที่ไม่มีแท็ก 1.–6.</h3>
+    <h3 style={{ fontSize: 15 }}>แชทที่ไม่มีแท็ก 1.–10.</h3>
     <div className="grid g-380">
       <div className="card" style={{ gap: 8 }}>
         <h3 style={{ fontSize: 14 }}>{OTHER_TAGS} · {fmt(other.total)} แชท</h3>
@@ -114,7 +114,7 @@ export function Reasons({ chats, from, to, day }: { chats: Lead[]; from: string 
       <p className="small">นับแต่ละแชทครั้งเดียวต่อแท็ก แชทหนึ่งอาจมีหลายเหตุผล และแอดมินอาจยังติดแท็กไม่ครบ · ลูกค้าเก่าคือแชทที่มีแท็ก 8.ลูกค้าเก่า หรือไม่มีแท็กวันที่ของวันแรกที่พบ แท็กปิดของลูกค้าเก่าบางแชทอาจค้างจากการซื้อครั้งก่อน · ปิดการขายในไฟล์วันนั้น นับแชทที่แท็กปิดเพิ่งปรากฏในไฟล์ข้อความของวันนั้นเป็นครั้งแรก</p>
       <h3 style={{ fontSize: 15 }}>คนที่ไม่ซื้อ เงียบไปที่ขั้นไหน</h3>
       <BarList items={dropStages(leads)} color="#B4401A" empty="ยังไม่มีแชทที่ไม่ซื้อ" />
-      <p className="small">ขั้นสุดท้ายตามแท็กที่เคยพบในไฟล์ แชทที่ยังไม่ปิดอาจยังคุยอยู่ · แชทที่ไม่มีแท็ก 1.–6. แยกไว้ในตารางด้านล่าง</p>
+      <p className="small">ขั้นสุดท้ายตามแท็กที่เคยพบในไฟล์ แชทที่ยังไม่ปิดอาจยังคุยอยู่ · แชทหนึ่งอยู่แถวเดียว: มีแท็ก 1.–6. ใช้ขั้นนั้น ถ้าไม่มีใช้ 7., 10., 9., 8. ตามลำดับ · แชทที่ไม่มีแท็ก 1.–10. แยกไว้ในตารางด้านล่าง</p>
       <NoStageTables leads={leads} />
     </>}
   </section>

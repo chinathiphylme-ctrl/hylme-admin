@@ -18,9 +18,9 @@ export function stageOf(tags: string[]): Stage {
   return STAGE_PREFIX.find(([p]) => tags.some(t => t.startsWith(p)))?.[1] ?? 'อื่นๆ'
 }
 
-// chats with no 1.–6. tag, split by whether an admin tagged anything at all;
+// chats with no 1.–10. tag, split by whether an admin tagged anything at all;
 // date and ad-id tags don't count, they only say when or from which ad the chat came
-export const OTHER_TAGS = 'มีแท็กอื่น แต่ไม่มีแท็ก 1.–6.'
+export const OTHER_TAGS = 'มีแท็กอื่น แต่ไม่มีแท็ก 1.–10.'
 export const NO_TAGS = 'ไม่มีแท็กเลย'
 export const isDateOrAdTag = (t: string) => /^\d{1,2}\/\d{1,2}$/.test(t.trim()) || isAdTag(t)
 export const noStageLabel = (tags: string[]): string => tags.some(t => !isDateOrAdTag(t)) ? OTHER_TAGS : NO_TAGS
@@ -84,7 +84,7 @@ export type NoStageChats = {
   none: { chats: ConvRow[]; rows: [string, number][] }
 }
 
-// open chats with no 1.–6. tag: which other tags they carry (and how many went quiet), and the untagged ones,
+// open chats with no 1.–10. tag: which other tags they carry (and how many went quiet), and the untagged ones,
 // each with its chats newest first so admins can open them in Pancake and add a stage tag
 export function noStageChats(convs: ConvRow[]): NoStageChats {
   const open = convs.filter(c => numberOf(c.tags) === 0)

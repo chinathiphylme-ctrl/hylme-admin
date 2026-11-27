@@ -24,8 +24,10 @@ describe('reasons', () => {
     expect(r.lost.rows).toContainEqual(['ราคาแพง', 0])
   })
   it('uses stage precedence, ignores closed chats and keeps fixed zero stages', () => {
-    expect(dropStages([lead([], false, ['2.ขอราคา', '5.พร้อมสั่ง']), lead([], false, ['2.ขอราคา']), lead(), lead([], true)]))
-      .toEqual([['พร้อมสั่ง', 1], ['ลังเล', 0], ['ขอโปร', 0], ['ขอราคา', 1], ['ถามสุขภาพ', 0], ['สนใจ', 0]])
+    expect(dropStages([lead([], false, ['2.ขอราคา', '5.พร้อมสั่ง']), lead([], false, ['2.ขอราคา']), lead(), lead([], true),
+      lead([], false, ['8.ลูกค้าเก่า']), lead([], false, ['9.อื่นๆ .(ทักมั่ว)', '8.ลูกค้าเก่า'])]))
+      .toEqual([['พร้อมสั่ง', 1], ['ลังเล', 0], ['ขอโปร', 0], ['ขอราคา', 1], ['ถามสุขภาพ', 0], ['สนใจ', 0],
+        ['7.เปรียบเทียบราคา', 0], ['10.เราทักเม้น', 0], ['9.ทักมั่ว', 1], ['8.ลูกค้าเก่า', 1]])
   })
   it('has no invalid rates for an empty cohort', () => {
     expect(topicStats([])).toEqual({ avg: null, buy: [], notBuy: [], none: 0 })
@@ -69,10 +71,11 @@ describe('noStageBreakdown', () => {
   it('splits open no-stage chats into other-tag counts and untagged chats; date and ad tags do not count', () => {
     const ad = { ...lead([], false, ['12/11', '120247446239640']), ads: ['120247446239640'], typedFirst: false }
     const r = noStageBreakdown([
-      lead([], false, ['9.อื่นๆ .(ทักมั่ว)', 'ไม่เปิดอ่าน', '12/11']), lead([], false, ['ไม่เปิดอ่าน']), ad,
+      lead([], false, ['มะกอก', 'ไม่เปิดอ่าน', '12/11']), lead([], false, ['ไม่เปิดอ่าน']), ad,
       { ...lead(), msgs: 5 }, lead([], false, ['2.ขอราคา']), lead([], true, ['ไม่เปิดอ่าน']),
+      lead([], false, ['9.อื่นๆ .(ทักมั่ว)']), lead([], false, ['10.เราทักเม้น']),
     ])
-    expect(r.other).toEqual({ total: 2, rows: [['ไม่เปิดอ่าน', 2], ['9.อื่นๆ .(ทักมั่ว)', 1]] })
+    expect(r.other).toEqual({ total: 2, rows: [['ไม่เปิดอ่าน', 2], ['มะกอก', 1]] })
     expect(r.none.total).toBe(2)
     expect(r.none.rows).toEqual([['ส่งข้อความเดียว', 1], ['2–3 ข้อความ', 0], ['4 ข้อความขึ้นไป', 1],
       ['เริ่มจากกดปุ่ม', 1], ['พิมพ์ข้อความแรกเอง', 1], ['มีเลขแอด (มาจากโฆษณา)', 1]])

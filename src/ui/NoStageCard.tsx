@@ -1,5 +1,5 @@
 import { pageName } from '../config/pages'
-import { isDateOrAdTag, NO_TAGS, noStageChats, replyOf } from '../metrics/conversations'
+import { isDateOrAdTag, NO_TAGS, noStageChats, OTHER_TAGS, replyOf } from '../metrics/conversations'
 import type { ConvRow } from '../parse/types'
 import { fmt, thaiDay } from './viewModel'
 
@@ -63,7 +63,7 @@ export function NoStageCard({ convs }: { convs: ConvRow[] }) {
     </div>
     <div className="grid g-380">
       <div className="stack" style={{ gap: 8 }}>
-        <h3 style={{ fontSize: 14 }}>มีแท็กอื่น แต่ไม่มีแท็ก 1.–10. · {fmt(other.chats.length)} แชท</h3>
+        <h3 style={{ fontSize: 14 }}>{OTHER_TAGS} · {fmt(other.chats.length)} แชท</h3>
         <p className="small">เงียบ {fmt(other.silent)} จาก {fmt(other.chats.length)} แชท ({pct(other.silent, other.chats.length)}) · เงียบ = มีแท็กอ่านไม่ตอบ หรือไม่เปิดอ่าน</p>
         {head.length > 0 && <TagTable rows={head} total={other.chats.length} />}
         {rest.length > 0 && <details>

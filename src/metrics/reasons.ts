@@ -1,5 +1,5 @@
 import { TOPICS, type Topic } from '../parse/topics'
-import { isDateOrAdTag, NO_TAGS, noStageLabel, OTHER_TAGS, stageOf } from './conversations'
+import { isDateOrAdTag, NO_TAGS, noStageLabel, NUMBER_ROWS, numberOf, OTHER_TAGS, stageOf } from './conversations'
 import type { Lead } from './leads'
 import { BUY_REASON_TAGS, LOST_REASON_TAGS } from '../grouping/rules'
 
@@ -48,15 +48,22 @@ export function closedOnDay(leads: Lead[], day: string): { closed: number; tagge
 }
 
 export function dropStages(leads: Lead[]): [string, number][] {
-  const stages = leads.filter(l => !l.closed).map(l => stageOf(l.tags))
-  return ['พร้อมสั่ง', 'ลังเล', 'ขอโปร', 'ขอราคา', 'ถามสุขภาพ', 'สนใจ'].map(s => [s, stages.filter(stage => stage === s).length])
+  // stages 1.–6. from the most advanced down, then the chats sitting under 7., 10., 9., 8. (numberOf's order),
+  // so every open chat with a numbered tag shows once; chats with none are in noStageBreakdown
+  const open = leads.filter(l => !l.closed)
+  const stages = open.map(l => stageOf(l.tags))
+  const numbers = open.map(l => numberOf(l.tags))
+  return [
+    ...['พร้อมสั่ง', 'ลังเล', 'ขอโปร', 'ขอราคา', 'ถามสุขภาพ', 'สนใจ'].map((s): [string, number] => [s, stages.filter(stage => stage === s).length]),
+    ...[7, 10, 9, 8].map((n): [string, number] => [NUMBER_ROWS[n - 1], numbers.filter(x => x === n).length]),
+  ]
 }
 
 export type NoStage = { total: number; rows: [string, number][] }
 
-// open chats with no 1.–6. tag, in two tables: which other tags they carry, and what the untagged ones look like
+// open chats with no 1.–10. tag, in two tables: which other tags they carry, and what the untagged ones look like
 export function noStageBreakdown(leads: Lead[]): { other: NoStage; none: NoStage } {
-  const open = leads.filter(l => !l.closed && stageOf(l.tags) === 'อื่นๆ')
+  const open = leads.filter(l => !l.closed && numberOf(l.tags) === 0)
   const other = open.filter(l => noStageLabel(l.tags) === OTHER_TAGS)
   const none = open.filter(l => noStageLabel(l.tags) === NO_TAGS)
   const tags = new Map<string, number>()

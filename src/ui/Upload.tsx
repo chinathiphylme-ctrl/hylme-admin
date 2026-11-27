@@ -111,6 +111,7 @@ export function Upload({ uploads, overrides, onSaved, goTags }: {
     if (!files?.length) return
     setBusy(true)
     setResults([])
+    setChecked([])
     setError('')
     const next = await Promise.all([...files].map(parseFile))
     setParsed(prev => [...prev.filter(p => !next.some(n => n.fileName === p.fileName)), ...next])
