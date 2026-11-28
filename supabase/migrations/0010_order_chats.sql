@@ -32,10 +32,13 @@ language plpgsql security definer set search_path = public as $$
 begin
   perform assert_code(p_code);
 
+  -- an order read twice in one round (it moved to the next page while Pancake was being read) keeps its last copy
   insert into order_chats (order_id, conversation_id, page_id, day)
-  select x.order_id, x.conversation_id, nullif(x.page_id, ''), x.day
-  from jsonb_to_recordset(p_rows) as x(order_id text, conversation_id text, page_id text, day date)
+  select distinct on (x.order_id) x.order_id, x.conversation_id, nullif(x.page_id, ''), x.day
+  from jsonb_array_elements(p_rows) with ordinality as e(r, n)
+  cross join lateral jsonb_to_record(e.r) as x(order_id text, conversation_id text, page_id text, day date)
   where coalesce(x.order_id, '') <> '' and coalesce(x.conversation_id, '') <> '' and x.day is not null
+  order by x.order_id, e.n desc
   on conflict (order_id) do update set
     conversation_id = excluded.conversation_id, page_id = excluded.page_id, day = excluded.day, updated_at = now()
   where (order_chats.conversation_id, order_chats.page_id, order_chats.day)

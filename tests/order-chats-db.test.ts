@@ -39,6 +39,13 @@ describe('save_order_chats', () => {
     expect((await anon(`select rows from order_chat_sync`))[0]).toEqual({ rows: 1 })
   })
 
+  it('takes the last copy when one batch repeats an order', async () => {
+    await anon(`select save_order_chats('ok', $1::jsonb)`, [JSON.stringify([
+      { order_id: '7', conversation_id: 'p_old', page_id: 'p', day: '2026-11-26' },
+      { order_id: '7', conversation_id: 'p_new', page_id: 'p', day: '2026-11-26' }])])
+    expect(await anon(`select conversation_id from order_chats where order_id = '7'`)).toEqual([{ conversation_id: 'p_new' }])
+  })
+
   it('rejects a wrong code and direct writes', async () => {
     await expect(anon(`select save_order_chats('bad', '[]'::jsonb)`)).rejects.toThrow('รหัสอัปโหลดไม่ถูกต้อง')
     await expect(anon(`insert into order_chats (order_id, conversation_id, day) values ('9', 'x', '2026-11-26')`)).rejects.toThrow()
