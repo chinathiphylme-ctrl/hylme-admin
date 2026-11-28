@@ -154,7 +154,7 @@ export function App() {
   } else if (!base) {
     body = <div className="grid g-200">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton" />)}</div>
   } else if (tab === 'upload') {
-    body = <UploadScreen uploads={base.uploads} overrides={base.overrides} onSaved={reload} goTags={() => goTab('tags')} />
+    body = <UploadScreen uploads={base.uploads} overrides={base.overrides} onSaved={reload} goTags={() => goTab('tags')} allConvs={base.allConvs} seen={base.seen} />
   } else if (tab === 'tags') {
     body = <Tags tags={base.allTags} overrides={base.overrides} adNames={base.adNames} onSaved={reload} />
   } else if (tab === 'ads' && latest && range) {

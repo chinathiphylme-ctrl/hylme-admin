@@ -1,6 +1,7 @@
 import type { PageId } from '../config/pages'
 import { CLOSE_TAGS } from '../grouping/rules'
 import type { Seen } from '../metrics/conversations'
+import type { OrderChat } from '../metrics/orderCheck'
 import type { Quote, QuoteCategory } from '../metrics/quotes'
 import { daysIn, previousRange, type DateRange } from '../metrics/range'
 import type { ConvRow, OrderRow, TagRow } from '../parse/types'
@@ -117,6 +118,32 @@ export async function fetchOrders(r: DateRange): Promise<OrderRow[]> {
     db().from('pancake_orders').select('order_id,day,confirmed_at,admin,source,page_id,amount,discount,cod,status,items')
       .gte('day', r.from).lte('day', r.to).order('day').order('order_id').range(a, b))
   return rows.map(fromDbOrder)
+}
+
+// a missing table means migration 0010 isn't installed yet: the card then shows no pairs instead of failing
+const missingTable = (m: string) => /relation .* does not exist|could not find the table/i.test(m)
+
+// which chat each order came from (hourly Pancake sync), for orders confirmed between from and to
+export async function fetchOrderChats(from: string, to: string): Promise<OrderChat[]> {
+  try {
+    const rows = await all<{ order_id: string; conversation_id: string; page_id: string | null; day: string }>((a, b) =>
+      db().from('order_chats').select('order_id,conversation_id,page_id,day').gte('day', from).lte('day', to)
+        .order('order_id').range(a, b))
+    return rows.map(r => ({ orderId: r.order_id, conversationId: r.conversation_id, pageId: r.page_id, day: r.day }))
+  } catch (e) {
+    if (missingTable((e as Error).message)) return []
+    throw e
+  }
+}
+
+// when the sync last sent pairs, or null if it never has
+export async function fetchOrderChatSync(): Promise<string | null> {
+  const { data, error } = await db().from('order_chat_sync').select('at').limit(1)
+  if (error) {
+    if (missingTable(error.message)) return null
+    throw new Error(error.message)
+  }
+  return (data?.[0] as { at: string } | undefined)?.at ?? null
 }
 
 // segment rates only need when a close tag first appeared

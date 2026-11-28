@@ -11,6 +11,7 @@ import type { Candidate, ConvRow, MessagesResult, OrdersResult, TagStatsResult }
 import { Candidates } from './Candidates'
 import { loadCode, storeCode } from './code'
 import { TagCheckCard } from './TagCheckCard'
+import type { Seen } from '../metrics/conversations'
 import { uploadTime } from './Sidebar'
 import { existingKeys, KIND_LABEL, planUpload } from './uploadPlan'
 import { ACCENT, rangeLabel, thaiMonth } from './viewModel'
@@ -91,8 +92,8 @@ function Calendar({ uploads }: { uploads: UploadRow[] }) {
   )
 }
 
-export function Upload({ uploads, overrides, onSaved, goTags }: {
-  uploads: UploadRow[]; overrides: Record<string, string>; onSaved: () => void; goTags: () => void
+export function Upload({ uploads, overrides, onSaved, goTags, allConvs, seen }: {
+  uploads: UploadRow[]; overrides: Record<string, string>; onSaved: () => void; goTags: () => void; allConvs: ConvRow[]; seen: Seen[]
 }) {
   const [parsed, setParsed] = useState<Parsed[]>([])
   const [busy, setBusy] = useState(false)
@@ -222,7 +223,7 @@ export function Upload({ uploads, overrides, onSaved, goTags }: {
         </div>
         {error && <p className="msg-err">{error}</p>}
         {results.map(r => <p key={r.fileName} className={r.ok ? 'msg-ok' : 'msg-err'}>{r.fileName}: {r.text}</p>)}
-        <TagCheckCard convs={checked} />
+        <TagCheckCard convs={checked} allConvs={allConvs} seen={seen} />
       </section>
 
       <section className="card" style={{ gap: 14 }}>
