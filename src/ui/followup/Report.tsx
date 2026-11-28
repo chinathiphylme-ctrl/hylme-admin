@@ -6,12 +6,15 @@ import { report, type ReportFilter, type Role, type Staff } from '../../followup
 import { bangkokToday } from '../../followup/schedule'
 import { silentReport, type Listed } from '../../followup/silent'
 import { addDays } from '../../metrics/range'
-import { rangeLabel } from '../viewModel'
+import { rangeLabel, thaiDay } from '../viewModel'
 import { errText, money, useToast } from './common'
 import type { Ready } from './useFollowup'
 
 type Preset = 'today' | '7d' | '30d' | 'month' | 'custom'
 const PRESETS: [Preset, string][] = [['today', 'วันนี้'], ['7d', '7 วัน'], ['30d', '30 วัน'], ['month', 'เดือนนี้'], ['custom', 'กำหนดเอง']]
+const ROUNDS = [1, 2, 3, 4, 5, 6, 7]
+const RIGHT = { textAlign: 'right' } as const
+const dash = (n: number) => (n ? String(n) : '–')
 
 export function Report({ fu, silentDays, reload }: { fu: Ready; silentDays: Map<string, Listed[]>; reload: () => Promise<void> }) {
   const today = bangkokToday()
@@ -119,6 +122,32 @@ export function Report({ fu, silentDays, reload }: { fu: Ready; silentDays: Map<
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="card">
+        <h2>ติดตามรายวัน แยกรอบ</h2>
+        <p className="desc">นับครั้งที่กดบันทึกผลในแต่ละวัน (เวลาไทย) ตามตัวกรองด้านบน · รวมรอบที่ระบบบันทึกจากแท็ก Pancake</p>
+        {r.byDay.length === 0 ? <p className="desc">ยังไม่มีการติดตามในช่วงนี้</p> : (
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>วัน</th>{ROUNDS.map(n => <th key={n} style={RIGHT}>รอบ {n}</th>)}<th style={RIGHT}>รวม</th></tr></thead>
+              <tbody>
+                {r.byDay.map(d => (
+                  <tr key={d.day}>
+                    <td style={{ whiteSpace: 'nowrap' }}>{thaiDay(d.day)}</td>
+                    {d.rounds.map((v, i) => <td key={i} className="num" style={RIGHT}>{dash(v)}</td>)}
+                    <td className="num" style={RIGHT}><b>{d.total}</b></td>
+                  </tr>
+                ))}
+                <tr>
+                  <td><b>รวมทั้งช่วง</b></td>
+                  {ROUNDS.map((_, i) => <td key={i} className="num" style={RIGHT}><b>{dash(r.byDay.reduce((s, d) => s + d.rounds[i], 0))}</b></td>)}
+                  <td className="num" style={RIGHT}><b>{r.byDay.reduce((s, d) => s + d.total, 0)}</b></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <section className="card">

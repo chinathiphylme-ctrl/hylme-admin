@@ -9,6 +9,8 @@ export type ReportFilter = { from: string; to: string; ownerId: string | 'all'; 
 
 export type OwnerRow = { ownerId: string; name: string; leads: number; open: number; overdue: number; followups: number; won: number; sales: number }
 export type ProductRow = { product: string; leads: number; followups: number; won: number; sales: number }
+// follow-ups saved on one Bangkok day; rounds[0] = round 1 … rounds[6] = round 7
+export type DayRounds = { day: string; rounds: number[]; total: number }
 
 // the same rule as the daily sales report, plus returns: a cancelled or returned order is not a sale
 export const orderLive = (o: OrderRow) => !/ยกเลิก|คืน|ตีกลับ/.test(o.status)
@@ -32,13 +34,22 @@ export function report(
   const blank = (): Acc => ({ leads: 0, open: 0, overdue: 0, followups: 0, won: 0, sales: 0 })
   const owners = new Map<string, Acc>()
   const products = new Map<string, Acc>()
+  const days = new Map<string, DayRounds>()
   const total = { dueToday: 0, overdue: 0, followups: 0, skips: 0, won: 0, sales: 0, salesOrders: 0, pending: 0, cancelled: 0, wonNoOrder: 0, followupsToday: 0 }
 
   for (const l of leads) {
     const evs = byLead.get(l.id) ?? []
     const st = stateOf(l, evs, today)
     const ranged = evs.filter(e => inRange(eventDay(e)))
-    const followups = ranged.filter(e => e.kind === 'round').length
+    const rounds = ranged.filter(e => e.kind === 'round')
+    const followups = rounds.length
+    for (const e of rounds) {
+      const d = eventDay(e)
+      const row = days.get(d) ?? { day: d, rounds: [0, 0, 0, 0, 0, 0, 0], total: 0 }
+      if (e.roundNo !== null && e.roundNo >= 1 && e.roundNo <= 7) row.rounds[e.roundNo - 1]++
+      row.total++
+      days.set(d, row)
+    }
     const won = ranged.some(isWin) ? 1 : 0
     let sales = 0
     const myLinks = input.links.filter(k => k.leadId === l.id)
@@ -83,7 +94,9 @@ export function report(
     .map(([product, a]) => ({ product, leads: a.leads, followups: a.followups, won: a.won, sales: a.sales }))
     .sort((a, b) => b.leads - a.leads || a.product.localeCompare(b.product, 'th'))
 
-  return { ...total, leads: leads.length, byOwner, byProduct }
+  const byDay = [...days.values()].sort((a, b) => b.day.localeCompare(a.day))
+
+  return { ...total, leads: leads.length, byOwner, byProduct, byDay }
 }
 
 export type Report = ReturnType<typeof report>

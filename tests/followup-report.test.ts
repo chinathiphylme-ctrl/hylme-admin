@@ -82,3 +82,26 @@ describe('GM report', () => {
     expect(orderLive(order('x', '2026-11-01', 1, 'ส่งแล้ว'))).toBe(true)
   })
 })
+
+describe('rounds per day', () => {
+  it('counts round events per Bangkok day and round, newest first, matching followups', () => {
+    const leads = [lead('a'), lead('b', { ownerId: 'u2' })]
+    const events = [
+      ev('a', '2026-11-10T02:00:00Z', { roundNo: 1 }),
+      ev('a', '2026-11-10T03:00:00Z', { roundNo: 5 }),
+      ev('b', '2026-11-10T04:00:00Z', { roundNo: 5, by: null }),
+      ev('b', '2026-11-30T16:30:00Z', { roundNo: 7 }), // 23:30 Bangkok 30 Nov
+      ev('a', '2026-11-11T02:00:00Z', { roundNo: null }), // counts in total only
+      ev('a', '2026-11-11T05:00:00Z', { kind: 'skip', result: null }),
+    ]
+    const r = report({ leads, events, links: [], orders: [], staff, today: '2026-11-30' }, all)
+    expect(r.byDay).toEqual([
+      { day: '2026-11-30', rounds: [0, 0, 0, 0, 0, 0, 1], total: 1 },
+      { day: '2026-11-11', rounds: [0, 0, 0, 0, 0, 0, 0], total: 1 },
+      { day: '2026-11-10', rounds: [1, 0, 0, 0, 2, 0, 0], total: 3 },
+    ])
+    expect(r.byDay.reduce((s, d) => s + d.total, 0)).toBe(r.followups)
+    const u2 = report({ leads, events, links: [], orders: [], staff, today: '2026-11-30' }, { ...all, ownerId: 'u2' })
+    expect(u2.byDay.map(d => [d.day, d.total])).toEqual([['2026-11-30', 1], ['2026-11-10', 1]])
+  })
+})
